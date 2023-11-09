@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "compile": "tsc src/index.ts --outDir build --m commonjs"
+  },
+  "dependencies": {
+    "typescript": "5.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.8.10"
+  }
+}
