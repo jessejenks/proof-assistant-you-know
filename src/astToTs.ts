@@ -3,8 +3,7 @@ import {
     Document,
     Proof,
     Assumption,
-    SimpleStep,
-    SubproofStep,
+    Step,
     Implication,
     Disjunction,
     Conjunction,
@@ -12,9 +11,7 @@ import {
     Identifier,
     True,
     False,
-    Step,
     Statement,
-    AstKind,
 } from "./parser/parser";
 import { Visitor } from "./parser/visitor";
 
@@ -24,9 +21,6 @@ type Frame = {
     freeVariables: Record<string, 0>;
     lastName: string | null;
 };
-
-const isAssumption = (s: Statement): s is Assumption => s.kind === AstKind.Assumption;
-const isStep = (s: Statement): s is Step => s.kind === AstKind.SimpleStep || s.kind === AstKind.SubproofStep;
 
 export class AstToTs extends Visitor<ts.Node> {
     private frameStack: Frame[];
@@ -69,10 +63,7 @@ export class AstToTs extends Visitor<ts.Node> {
     }
 
     private makeBody(stmts: Statement[]): ts.Block {
-        const steps = stmts.filter(isStep);
-        const visited: ts.Statement[] = steps.map((s) =>
-            s.kind === AstKind.SimpleStep ? this.visitSimpleStep(s) : this.visitSubproofStep(s),
-        );
+        const visited = stmts.map(this.visit) as ts.Statement[];
         const lastName = this.getLastName();
         if (lastName === null) throw new Error("No name to return");
         visited.push(ts.factory.createReturnStatement(ts.factory.createIdentifier(lastName)));
@@ -88,17 +79,15 @@ export class AstToTs extends Visitor<ts.Node> {
         });
         this.varCounter = 0;
         const tp = this.visit(node.statement) as ts.TypeNode;
-        const parameters = node.justifications
-            .filter(isAssumption)
-            .map((n) =>
-                ts.factory.createParameterDeclaration(
-                    undefined,
-                    undefined,
-                    ts.factory.createIdentifier(n.name.name),
-                    undefined,
-                    this.visit(n.value) as ts.TypeNode,
-                ),
-            );
+        const parameters = node.hypotheses.map(([name, type]) =>
+            ts.factory.createParameterDeclaration(
+                undefined,
+                undefined,
+                ts.factory.createIdentifier(name.name),
+                undefined,
+                this.visit(type) as ts.TypeNode,
+            ),
+        );
         const body = this.makeBody(node.justifications);
         const popped = this.frameStack.pop();
         return ts.factory.createExpressionStatement(
@@ -120,48 +109,19 @@ export class AstToTs extends Visitor<ts.Node> {
     };
 
     visitAssumption = (node: Assumption) => {
-        throw new Error();
-    };
-
-    visitSimpleStep = (node: SimpleStep) => {
         const name = this.getName(node.name);
-        const tp = node.value === null ? undefined : (this.visit(node.value) as ts.TypeNode);
-        const [caller, ...args] = node.justifications.map((n) => ts.factory.createIdentifier(n.name));
-        return ts.factory.createVariableStatement(
-            undefined,
-            ts.factory.createVariableDeclarationList(
-                [
-                    ts.factory.createVariableDeclaration(
-                        name,
-                        undefined,
-                        tp,
-                        args.length === 0 ? caller : ts.factory.createCallExpression(caller, undefined, args),
-                    ),
-                ],
-                ts.NodeFlags.Const,
-            ),
-        );
-    };
-
-    visitSubproofStep = (node: SubproofStep) => {
-        const name = this.getName(node.name);
-        const tp = node.value === null ? undefined : (this.visit(node.value) as ts.TypeNode);
         this.frameStack.push({
             freeVariables: {},
             lastName: null,
         });
-        const parameters = node.justifications
-            .filter(isAssumption)
-            .map((n) =>
-                ts.factory.createParameterDeclaration(
-                    undefined,
-                    undefined,
-                    ts.factory.createIdentifier(n.name.name),
-                    undefined,
-                    this.visit(n.value) as ts.TypeNode,
-                ),
-            );
-        const body = this.makeBody(node.justifications);
+        const parameter = ts.factory.createParameterDeclaration(
+            undefined,
+            undefined,
+            ts.factory.createIdentifier(this.getName(node.name)),
+            undefined,
+            this.visit(node.value) as ts.TypeNode,
+        );
+        const body = this.makeBody(node.subproof);
         const popped = this.frameStack.pop();
         if (popped) {
             Object.keys(this.getAllFree()).forEach((k) => {
@@ -188,8 +148,8 @@ export class AstToTs extends Visitor<ts.Node> {
                                               ts.factory.createIdentifier(x),
                                           ),
                                       ),
-                            parameters as readonly ts.ParameterDeclaration[],
-                            tp,
+                            [parameter],
+                            undefined,
                             undefined,
                             body,
                         ),
@@ -199,6 +159,27 @@ export class AstToTs extends Visitor<ts.Node> {
             ),
         );
     };
+
+    visitStep = (node: Step) => {
+        const name = this.getName(node.name);
+        const tp = node.value === null ? undefined : (this.visit(node.value) as ts.TypeNode);
+        const [caller, ...args] = node.justifications.map((n) => ts.factory.createIdentifier(n.name));
+        return ts.factory.createVariableStatement(
+            undefined,
+            ts.factory.createVariableDeclarationList(
+                [
+                    ts.factory.createVariableDeclaration(
+                        name,
+                        undefined,
+                        tp,
+                        args.length === 0 ? caller : ts.factory.createCallExpression(caller, undefined, args),
+                    ),
+                ],
+                ts.NodeFlags.Const,
+            ),
+        );
+    };
+
     visitImplication = (node: Implication) =>
         ts.factory.createTypeReferenceNode("Impl", [
             this.visit(node.left) as ts.TypeNode,

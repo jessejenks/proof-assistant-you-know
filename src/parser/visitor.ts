@@ -2,8 +2,7 @@ import {
     Document,
     Proof,
     Assumption,
-    SimpleStep,
-    SubproofStep,
+    Step,
     Implication,
     Disjunction,
     Conjunction,
@@ -28,11 +27,8 @@ export abstract class Visitor<T = void> {
             case AstKind.Assumption:
                 return this.visitAssumption(node);
 
-            case AstKind.SimpleStep:
-                return this.visitSimpleStep(node);
-
-            case AstKind.SubproofStep:
-                return this.visitSubproofStep(node);
+            case AstKind.Step:
+                return this.visitStep(node);
 
             case AstKind.Implication:
                 return this.visitImplication(node);
@@ -60,8 +56,7 @@ export abstract class Visitor<T = void> {
     abstract visitDocument(node: Document): T;
     abstract visitProof(node: Proof): T;
     abstract visitAssumption(node: Assumption): T;
-    abstract visitSimpleStep(node: SimpleStep): T;
-    abstract visitSubproofStep(node: SubproofStep): T;
+    abstract visitStep(node: Step): T;
     abstract visitImplication(node: Implication): T;
     abstract visitDisjunction(node: Disjunction): T;
     abstract visitConjunction(node: Conjunction): T;
@@ -93,20 +88,18 @@ export class PrettyPrinter extends Visitor<string> {
     visitProof = (node: Proof): string =>
         `theorem ${this.visit(node.statement)};\n` + node.justifications.map(this.visit).join("\n");
 
-    visitAssumption = (node: Assumption): string => `${this.ind()}assume ${node.name.name}: ${this.visit(node.value)};`;
+    visitAssumption = (node: Assumption): string => {
+        this.depth++;
+        const subproof = node.subproof.map(this.visit).join("\n");
+        this.depth--;
+        const d = this.ind();
+        return `${d}assume ${node.name.name}: ${this.visit(node.value)} [\n${subproof}\n${d}];`;
+    };
 
-    visitSimpleStep = (node: SimpleStep): string =>
+    visitStep = (node: Step): string =>
         `${this.ind()}${node.name.name}${this.maybeType(node.value)} by ${node.justifications
             .map((n) => n.name)
             .join(" ")};`;
-
-    visitSubproofStep = (node: SubproofStep): string => {
-        this.depth++;
-        const subproof = node.justifications.map(this.visit).join("\n");
-        this.depth--;
-        const d = this.ind();
-        return `${d}${node.name.name}${this.maybeType(node.value)} by [\n` + subproof + `\n${d}];`;
-    };
 
     private maybeType = (expr: Expression | null): string => (expr === null ? "" : `: ${this.visit(expr)}`);
 

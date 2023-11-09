@@ -1,9 +1,9 @@
 /*
 Document    := Proof+
-Proof       := "theorem" Expression ";" Statement+
+Proof       := "theorem" ("[" identifier ":" "Expression" ("," identifier ":" Expression)* "]")? Expression ";" Statement+
 Statement   := Assumption | Step
-Assumption  := "assume" identifier ":" Expression ";"
-Step        := identifier (":" Expression)? "by" (identifier+ | "[" Statement+ "]") ";"
+Assumption  := "assume" identifier ":" Expression "[" Statement+ "]" ";"
+Step        := identifier (":" Expression)? "by" identifier+ ";"
 Expression  := Implication
 Implication := Disjunction ("=>" Disjunction)*
 Disjunction := Conjunction ("|" Conjunction)*
@@ -20,8 +20,7 @@ export enum AstKind {
     Document,
     Proof,
     Assumption,
-    SimpleStep,
-    SubproofStep,
+    Step,
     Implication,
     Disjunction,
     Conjunction,
@@ -35,8 +34,7 @@ const KIND_TO_NAME: Record<AstKind, string> = {
     [AstKind.Document]: "Document",
     [AstKind.Proof]: "Proof",
     [AstKind.Assumption]: "Assumption",
-    [AstKind.SimpleStep]: "SimpleStep",
-    [AstKind.SubproofStep]: "SubproofStep",
+    [AstKind.Step]: "Step",
     [AstKind.Implication]: "Implication",
     [AstKind.Disjunction]: "Disjunction",
     [AstKind.Conjunction]: "Conjunction",
@@ -56,6 +54,7 @@ export type Document = {
 };
 export type Proof = {
     kind: AstKind.Proof;
+    hypotheses: [Identifier, Expression][];
     statement: Expression;
     justifications: Statement[];
 };
@@ -65,19 +64,13 @@ export type Assumption = {
     kind: AstKind.Assumption;
     name: Identifier;
     value: Expression;
+    subproof: Statement[];
 };
-export type Step = SimpleStep | SubproofStep;
-export type SimpleStep = {
-    kind: AstKind.SimpleStep;
+export type Step = {
+    kind: AstKind.Step;
     name: Identifier;
     value: Expression | null;
     justifications: Identifier[];
-};
-export type SubproofStep = {
-    kind: AstKind.SubproofStep;
-    name: Identifier;
-    value: Expression | null;
-    justifications: Statement[];
 };
 
 export type Expression = True | False | Identifier | Negation | Conjunction | Disjunction | Implication;
@@ -152,15 +145,29 @@ export class Parser {
         return { kind: AstKind.Document, proofs };
     }
     parseProof(): Proof {
-        // Proof       := "theorem" Expression ";" Statement+
+        // Proof       := "theorem" ("[" identifier ":" "Expression" ("," identifier ":" Expression)* "]")? Expression ";" Statement+
         this.expect(TokenKind.TheoremKeyword);
+        const hypotheses: [Identifier, Expression][] = [];
+        if (this.chompIfNextIs(TokenKind.LFlatBracket)) {
+            let param = makeId(this.expect(TokenKind.Identifier));
+            this.expect(TokenKind.Colon);
+            let value = this.parseExpression();
+            hypotheses.push([param, value]);
+            while (this.chompIfNextIs(TokenKind.Comma)) {
+                param = makeId(this.expect(TokenKind.Identifier));
+                this.expect(TokenKind.Colon);
+                value = this.parseExpression();
+                hypotheses.push([param, value]);
+            }
+            this.expect(TokenKind.RFlatBracket);
+        }
         const statement = this.parseExpression();
         this.expect(TokenKind.Semi);
         const justifications: Statement[] = [this.parseStatement()];
         while (!this.lexer.eof() && this.nextIs(TokenKind.Identifier)) {
             justifications.push(this.parseStatement());
         }
-        return { kind: AstKind.Proof, statement, justifications };
+        return { kind: AstKind.Proof, hypotheses, statement, justifications };
     }
     parseStatement(): Statement {
         // Statement   := Assumption | Step
@@ -171,56 +178,39 @@ export class Parser {
         }
     }
     parseAssumption(): Assumption {
-        // Assumption  := "assume" identifier ":" Expression ";"
+        // Assumption  := "assume" identifier ":" Expression "[" Statement+ "]" ";"
         this.expect(TokenKind.AssumeKeyword);
-        const name = this.expect(TokenKind.Identifier);
+        const name = makeId(this.expect(TokenKind.Identifier));
         this.expect(TokenKind.Colon);
         const value = this.parseExpression();
-        this.expect(TokenKind.Semi);
-        return { kind: AstKind.Assumption, name: makeId(name), value };
-    }
-
-    parseStep(): Step {
-        // Step        := identifier (":" Expression)? "by" (identifier+ | "[" Statement+ "]") ";"
-        const name = this.expect(TokenKind.Identifier);
-        let value: Expression | null = null;
-        if (this.chompIfNextIs(TokenKind.Colon)) {
-            value = this.parseExpression();
-        }
-        this.expect(TokenKind.ByKeyword);
-        if (this.chompIfNextIs(TokenKind.LFlatBracket)) {
-            return this.parseSubproofStep(makeId(name), value);
-        } else {
-            return this.parseSimpleStep(makeId(name), value);
-        }
-    }
-
-    private parseSimpleStep(name: Identifier, value: Expression | null): SimpleStep {
-        const identifiers = [this.expect(TokenKind.Identifier)];
-        while (!this.nextIs(TokenKind.Semi)) {
-            identifiers.push(this.expect(TokenKind.Identifier));
-        }
-        this.expect(TokenKind.Semi);
-        return {
-            kind: AstKind.SimpleStep,
-            name,
-            value,
-            justifications: identifiers.map(makeId),
-        };
-    }
-
-    private parseSubproofStep(name: Identifier, value: Expression | null): SubproofStep {
+        this.expect(TokenKind.LFlatBracket);
         const statements = [this.parseStatement()];
         while (!this.nextIs(TokenKind.RFlatBracket)) {
             statements.push(this.parseStatement());
         }
         this.expect(TokenKind.RFlatBracket);
         this.expect(TokenKind.Semi);
+        return { kind: AstKind.Assumption, name, value, subproof: statements };
+    }
+
+    parseStep(): Step {
+        // Step        := identifier (":" Expression)? "by" identifier+ ";"
+        const name = makeId(this.expect(TokenKind.Identifier));
+        let value: Expression | null = null;
+        if (this.chompIfNextIs(TokenKind.Colon)) {
+            value = this.parseExpression();
+        }
+        this.expect(TokenKind.ByKeyword);
+        const identifiers = [this.expect(TokenKind.Identifier)];
+        while (!this.nextIs(TokenKind.Semi)) {
+            identifiers.push(this.expect(TokenKind.Identifier));
+        }
+        this.expect(TokenKind.Semi);
         return {
-            kind: AstKind.SubproofStep,
+            kind: AstKind.Step,
             name,
             value,
-            justifications: statements,
+            justifications: identifiers.map(makeId),
         };
     }
 

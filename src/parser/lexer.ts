@@ -6,6 +6,7 @@ export enum TokenKind {
     RFlatBracket,
     Implies,
     Colon,
+    Comma,
     Semi,
     And,
     Or,
@@ -26,6 +27,7 @@ const KIND_TO_NAME: Record<TokenKind, string> = {
     [TokenKind.RFlatBracket]: "RFlatBracket",
     [TokenKind.Implies]: "Implies",
     [TokenKind.Colon]: "Colon",
+    [TokenKind.Comma]: "Comma",
     [TokenKind.Semi]: "Semi",
     [TokenKind.And]: "And",
     [TokenKind.Or]: "Or",
@@ -54,6 +56,7 @@ export type Token =
     | { kind: TokenKind.RFlatBracket; location: Location }
     | { kind: TokenKind.Implies; location: Location }
     | { kind: TokenKind.Colon; location: Location }
+    | { kind: TokenKind.Comma; location: Location }
     | { kind: TokenKind.Semi; location: Location }
     | { kind: TokenKind.And; location: Location }
     | { kind: TokenKind.Or; location: Location }
@@ -162,6 +165,8 @@ export class Lexer {
         switch (this.currentChar()) {
             case ";":
                 return { kind: TokenKind.Semi, location: this.getLocation() };
+            case ",":
+                return { kind: TokenKind.Comma, location: this.getLocation() };
             case ":":
                 return { kind: TokenKind.Colon, location: this.getLocation() };
             case "(":
