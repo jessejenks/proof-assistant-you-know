@@ -51,7 +51,7 @@ export class AstToTs extends Visitor<ts.Node> {
         return combined;
     }
 
-    private getName(name: Identifier): string {
+    private getName(name: { name: string }): string {
         if (name.name === "_") {
             const n = `_x${this.varCounter}`;
             this.varCounter++;
@@ -109,7 +109,7 @@ export class AstToTs extends Visitor<ts.Node> {
     };
 
     visitAssumption = (node: Assumption) => {
-        const name = this.getName(node.name);
+        const name = this.getName({ name: "_" });
         this.frameStack.push({
             freeVariables: {},
             lastName: null,
