@@ -68,7 +68,7 @@ export type Token =
     | { kind: TokenKind.ByKeyword; location: Location }
     | { kind: TokenKind.TheoremKeyword; location: Location };
 
-const WS = /\s/;
+const WS = /[ \t\n]/;
 const IDENTIFIER = /[a-zA-Z_-]/;
 const KEYWORDS_AND_LITERALS = {
     true: TokenKind.True,
@@ -106,51 +106,7 @@ export class Lexer {
     }
 
     private getNextToken(): Token | null {
-        this.skipWhiteSpace();
-        this.skipComments();
-        let tok: Token | null = null;
-        tok = this.readSymbol();
-        if (tok !== null) {
-            this.skipWhiteSpace();
-            this.skipComments();
-            return tok;
-        }
-        tok = this.readWord();
-        if (tok !== null) {
-            this.skipWhiteSpace();
-            this.skipComments();
-            return tok;
-        }
-
-        return null;
-    }
-
-    private skipWhiteSpace() {
-        let c: string;
-        while (!this.eof() && WS.test((c = this.currentChar()))) {
-            if (c === "\n") {
-                this.location.line++;
-                this.location.column = 1;
-            } else {
-                this.location.column++;
-            }
-            this.index++;
-        }
-    }
-
-    private skipComments() {
-        // TODO: Save these comments somewhere
-        // line comments
-        while (this.currentChar() === "/" && this.nextChar() === "/") {
-            while (!this.eof() && this.currentChar() !== "\n") {
-                this.location.column++;
-                this.index++;
-            }
-            if (this.eof()) return;
-            this.location.line++;
-            this.location.column = 1;
-            this.index++;
-        }
+        return this.readSymbol();
     }
 
     private getLocation(increment: boolean = true): Location {
@@ -162,37 +118,63 @@ export class Lexer {
     }
 
     private readSymbol(): Token | null {
-        switch (this.currentChar()) {
-            case ";":
-                return { kind: TokenKind.Semi, location: this.getLocation() };
-            case ",":
-                return { kind: TokenKind.Comma, location: this.getLocation() };
-            case ":":
-                return { kind: TokenKind.Colon, location: this.getLocation() };
-            case "(":
-                return { kind: TokenKind.LParen, location: this.getLocation() };
-            case ")":
-                return { kind: TokenKind.RParen, location: this.getLocation() };
-            case "[":
-                return { kind: TokenKind.LFlatBracket, location: this.getLocation() };
-            case "]":
-                return { kind: TokenKind.RFlatBracket, location: this.getLocation() };
-            case "&":
-                return { kind: TokenKind.And, location: this.getLocation() };
-            case "=": {
-                if (this.nextChar() == ">") {
-                    this.location.column += 2;
-                    this.index += 2;
-                    return { kind: TokenKind.Implies, location: this.getLocation(false) };
+        while (!this.eof()) {
+            switch (this.currentChar()) {
+                case ";":
+                    return { kind: TokenKind.Semi, location: this.getLocation() };
+                case ",":
+                    return { kind: TokenKind.Comma, location: this.getLocation() };
+                case ":":
+                    return { kind: TokenKind.Colon, location: this.getLocation() };
+                case "(":
+                    return { kind: TokenKind.LParen, location: this.getLocation() };
+                case ")":
+                    return { kind: TokenKind.RParen, location: this.getLocation() };
+                case "[":
+                    return { kind: TokenKind.LFlatBracket, location: this.getLocation() };
+                case "]":
+                    return { kind: TokenKind.RFlatBracket, location: this.getLocation() };
+                case "&":
+                    return { kind: TokenKind.And, location: this.getLocation() };
+                case "=": {
+                    if (this.nextChar() == ">") {
+                        this.location.column += 2;
+                        this.index += 2;
+                        return { kind: TokenKind.Implies, location: this.getLocation(false) };
+                    }
+                }
+                case "|":
+                    return { kind: TokenKind.Or, location: this.getLocation() };
+                case "~":
+                    return { kind: TokenKind.Not, location: this.getLocation() };
+                case "/": {
+                    if (this.nextChar() == "/") {
+                        this.index += 2;
+                        while (!this.eof() && this.currentChar() != "\n") {
+                            this.location.column++;
+                            this.index++;
+                        }
+                    }
+                    break;
+                }
+                case "\n": {
+                    this.location.column = 1;
+                    this.location.line++;
+                    this.index++;
+                    break;
+                }
+                case "\t":
+                case " ": {
+                    this.index++;
+                    this.location.column++;
+                    break;
+                }
+                default: {
+                    return this.readWord();
                 }
             }
-            case "|":
-                return { kind: TokenKind.Or, location: this.getLocation() };
-            case "~":
-                return { kind: TokenKind.Not, location: this.getLocation() };
-            default:
-                return null;
         }
+        return null;
     }
 
     private readWord(): Token | null {
