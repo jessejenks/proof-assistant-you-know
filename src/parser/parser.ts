@@ -55,7 +55,7 @@ export type Document = {
 export type Proof = {
     kind: AstKind.Proof;
     hypotheses: [Identifier, Expression][];
-    statement: Expression;
+    expression: Expression;
     justifications: Statement[];
 };
 
@@ -161,13 +161,13 @@ export class Parser {
             }
             this.expect(TokenKind.RFlatBracket);
         }
-        const statement = this.parseExpression();
+        const expression = this.parseExpression();
         this.expect(TokenKind.Semi);
         const justifications: Statement[] = [this.parseStatement()];
-        while (!this.lexer.eof() && this.nextIs(TokenKind.Identifier)) {
+        while (!this.lexer.eof() && (this.nextIs(TokenKind.Identifier) || this.nextIs(TokenKind.AssumeKeyword))) {
             justifications.push(this.parseStatement());
         }
-        return { kind: AstKind.Proof, hypotheses, statement, justifications };
+        return { kind: AstKind.Proof, hypotheses, expression, justifications };
     }
     parseStatement(): Statement {
         // Statement   := Assumption | Step
@@ -221,7 +221,6 @@ export class Parser {
 
     parseImplication(): Expression {
         // Implication := Disjunction ("=>" Disjunction)*
-
         const terms = [this.parseDisjunction()];
         while (this.chompIfNextIs(TokenKind.Implies)) {
             terms.push(this.parseDisjunction());

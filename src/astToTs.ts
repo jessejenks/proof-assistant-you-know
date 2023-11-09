@@ -78,7 +78,7 @@ export class AstToTs extends Visitor<ts.Node> {
             lastName: null,
         });
         this.varCounter = 0;
-        const tp = this.visit(node.statement) as ts.TypeNode;
+        const tp = this.visit(node.expression) as ts.TypeNode;
         const parameters = node.hypotheses.map(([name, type]) =>
             ts.factory.createParameterDeclaration(
                 undefined,

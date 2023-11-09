@@ -86,7 +86,7 @@ export class PrettyPrinter extends Visitor<string> {
     visitDocument = (node: Document): string => node.proofs.map(this.visit).join("\n");
 
     visitProof = (node: Proof): string =>
-        `theorem ${this.visit(node.statement)};\n` + node.justifications.map(this.visit).join("\n");
+        `theorem ${this.visit(node.expression)};\n` + node.justifications.map(this.visit).join("\n");
 
     visitAssumption = (node: Assumption): string => {
         this.depth++;
