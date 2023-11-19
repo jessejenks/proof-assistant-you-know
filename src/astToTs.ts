@@ -15,7 +15,10 @@ import {
 } from "./parser/parser";
 import { Visitor } from "./parser/visitor";
 
-// TODO: Optimize out `_` return cases. `const _x0 = ...; return _x0` could just be `return ...`;
+// Note: we can't just optimize out `_` return cases. i.e. not all `const _x0 = ...; return _x0;` can just be `return ...`;
+// This is because we need the declaration when the variable has an annotation
+// i.e. `const _x0: Expression = ...; return _x0;`
+// maybe we can optimize out when there isn't an annotation, but that's tricky too.
 
 type Frame = {
     freeVariables: Record<string, 0>;
@@ -200,7 +203,9 @@ export class AstToTs extends Visitor<ts.Node> {
     visitIdentifier = (node: Identifier) => {
         // we're assuming all identifiers that make it here are in a type expression
         // other kinds of identifiers should be manually handled
-        this.addFreeVariable(node.name);
+        if (node.name !== "True" && node.name !== "False") {
+            this.addFreeVariable(node.name);
+        }
         return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(node.name));
     };
     visitTrue = (_: True) => ts.factory.createTypeReferenceNode("True");
