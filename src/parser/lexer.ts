@@ -68,8 +68,7 @@ export type Token =
     | { kind: TokenKind.ByKeyword; location: Location }
     | { kind: TokenKind.TheoremKeyword; location: Location };
 
-const WS = /[ \t\n]/;
-const IDENTIFIER = /[a-zA-Z_-]/;
+const IDENTIFIER = /[a-zA-Z0-9_-]/;
 const KEYWORDS_AND_LITERALS = {
     true: TokenKind.True,
     false: TokenKind.False,
@@ -82,7 +81,7 @@ export class Lexer {
     private input: string;
     private index: number;
     // both 1-indexed
-    private location: Location;
+    location: Location;
     private currentToken: Token | null;
 
     constructor(input: string) {

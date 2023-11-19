@@ -1,6 +1,6 @@
 /*
 Document    := Proof+
-Proof       := "theorem" ("[" identifier ":" "Expression" ("," identifier ":" Expression)* "]")? Expression ";" Statement+
+Proof       := "theorem" "[" ((identifier ":" "Expression" ("," identifier ":" Expression)*)?)? "]" Expression ";" Statement+
 Statement   := Assumption | Step
 Assumption  := "assume" identifier ":" Expression "[" Statement+ "]" ";"
 Step        := identifier (":" Expression)? "by" identifier+ ";"
@@ -133,7 +133,7 @@ export class Parser {
         throw new ParseError(
             `Unexpected token. Expected ${tokenKindToString(tokenKind)} but got ${tokenKindToString(
                 tok?.kind,
-            )} at ${locationToString(tok?.location)}`,
+            )} at ${locationToString(tok?.location || this.lexer.location)}`,
         );
     }
     parse(): Document {
@@ -145,10 +145,12 @@ export class Parser {
         return { kind: AstKind.Document, proofs };
     }
     parseProof(): Proof {
-        // Proof       := "theorem" ("[" identifier ":" "Expression" ("," identifier ":" Expression)* "]")? Expression ";" Statement+
+        // Proof       := "theorem" "[" ((identifier ":" "Expression" ("," identifier ":" Expression)*)?)? "]" Expression ";" Statement+
         this.expect(TokenKind.TheoremKeyword);
         const hypotheses: [Identifier, Expression][] = [];
         if (this.chompIfNextIs(TokenKind.LFlatBracket)) {
+            if (this.chompIfNextIs(TokenKind.RFlatBracket)) {
+            } else {
             let param = makeId(this.expect(TokenKind.Identifier));
             this.expect(TokenKind.Colon);
             let value = this.parseExpression();
@@ -160,6 +162,7 @@ export class Parser {
                 hypotheses.push([param, value]);
             }
             this.expect(TokenKind.RFlatBracket);
+            }
         }
         const expression = this.parseExpression();
         this.expect(TokenKind.Semi);
