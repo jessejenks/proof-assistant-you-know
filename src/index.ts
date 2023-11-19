@@ -13,6 +13,9 @@ import {
     createAndElimLeft,
     createAndElimRight,
     createModusPonens,
+    createModusTollens,
+    createOrIntroLeft,
+    createOrIntroRight,
 } from "./primitives";
 import { Lexer } from "./parser/lexer";
 import { Parser } from "./parser/parser";
@@ -23,23 +26,6 @@ let start: [number, number];
 
 const sourceText = fs.readFileSync(process.argv[2], { encoding: "utf-8" });
 
-// const sourceText = `
-// theorem P => P;
-// _ by [
-//     assume p: P;
-//     _ by p;
-// ];
-// // comment
-// // theorem ((P => Q) & (P => R)) => (P => Q & R);
-// // assume h: ((P => Q) & (P => R));
-// // pToQ: (P => Q) by andElimLeft h;
-// // pToR: (P => R) by andElimRight h;
-// // _ by [
-// //     assume p: P;
-// //     q: Q by modusPonens pToQ p;
-// //     r: R by modusPonens pToR p;
-// //     _: Q & R by andIntro q r;
-// // ];`;
 console.log(
     sourceText
         .split("\n")
@@ -92,6 +78,9 @@ const sourceFile = statementsToFile([
     createAndElimLeft(),
     createAndElimRight(),
     createModusPonens(),
+    createModusTollens(),
+    createOrIntroLeft(),
+    createOrIntroRight(),
     ...transformed,
 ]);
 const text = fileToString(sourceFile);

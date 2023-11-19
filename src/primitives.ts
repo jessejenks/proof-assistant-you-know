@@ -13,14 +13,7 @@ export const createFalse = () =>
         undefined,
         "False",
         undefined,
-        ts.factory.createTypeLiteralNode([
-            ts.factory.createPropertySignature(
-                undefined,
-                "false",
-                undefined,
-                ts.factory.createTypeReferenceNode("False"),
-            ),
-        ]),
+        ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
     );
 
 const typeParameter = (name: string) =>
@@ -41,21 +34,6 @@ export const createAndDeclaration = () =>
             ts.factory.createTypeReferenceNode("A"),
             ts.factory.createTypeReferenceNode("B"),
         ]),
-        // ts.factory.createTypeLiteralNode(
-        //     [
-        //         ts.factory.createPropertySignature(
-        //             undefined,
-        //             "left",
-        //             undefined,
-        //             ts.factory.createTypeReferenceNode("A"),
-        //         ),
-        //         ts.factory.createPropertySignature(
-        //             undefined,
-        //             "right",
-        //             undefined,
-        //             ts.factory.createTypeReferenceNode("B"),
-        //         ),
-        //     ]
     );
 
 export const createOrDeclaration = () =>
@@ -64,34 +42,34 @@ export const createOrDeclaration = () =>
         "Or",
         [typeParameter("A"), typeParameter("B")],
         ts.factory.createUnionTypeNode([
-            ts.factory.createTupleTypeNode([
-                ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("left")),
-                ts.factory.createTypeReferenceNode("A"),
+            ts.factory.createTypeLiteralNode([
+                ts.factory.createPropertySignature(
+                    undefined,
+                    ts.factory.createIdentifier("_isLeft"),
+                    undefined,
+                    ts.factory.createLiteralTypeNode(ts.factory.createTrue()),
+                ),
+                ts.factory.createPropertySignature(
+                    undefined,
+                    ts.factory.createIdentifier("left"),
+                    undefined,
+                    ts.factory.createTypeReferenceNode(ts.factory.createIdentifier("A"), undefined),
+                ),
             ]),
-            ts.factory.createTupleTypeNode([
-                ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("right")),
-                ts.factory.createTypeReferenceNode("B"),
+            ts.factory.createTypeLiteralNode([
+                ts.factory.createPropertySignature(
+                    undefined,
+                    ts.factory.createIdentifier("_isLeft"),
+                    undefined,
+                    ts.factory.createLiteralTypeNode(ts.factory.createFalse()),
+                ),
+                ts.factory.createPropertySignature(
+                    undefined,
+                    ts.factory.createIdentifier("right"),
+                    undefined,
+                    ts.factory.createTypeReferenceNode(ts.factory.createIdentifier("B"), undefined),
+                ),
             ]),
-            // ts.factory.createTypeLiteralNode(
-            //     [
-            //         ts.factory.createPropertySignature(
-            //             undefined,
-            //             "left",
-            //             undefined,
-            //             ts.factory.createTypeReferenceNode("A"),
-            //         ),
-            //     ]
-            // ),
-            // ts.factory.createTypeLiteralNode(
-            //     [
-            //         ts.factory.createPropertySignature(
-            //             undefined,
-            //             "right",
-            //             undefined,
-            //             ts.factory.createTypeReferenceNode("B"),
-            //         ),
-            //     ]
-            // )
         ]),
     );
 
@@ -100,20 +78,7 @@ export const createImplDeclaration = () =>
         undefined,
         "Impl",
         [typeParameter("A"), typeParameter("B")],
-        ts.factory.createFunctionTypeNode(
-            undefined,
-            [
-                ts.factory.createParameterDeclaration(
-                    undefined,
-                    undefined,
-                    "_",
-                    undefined,
-                    ts.factory.createTypeReferenceNode("A"),
-                    undefined,
-                ),
-            ],
-            ts.factory.createTypeReferenceNode("B"),
-        ),
+        ts.factory.createFunctionTypeNode(undefined, [parameter("_", typeReference("A"))], typeReference("B")),
     );
 
 export const createEquivDeclaration = () =>
@@ -128,37 +93,6 @@ export const createEquivDeclaration = () =>
                 ["Impl", ["B", "A"]],
             ],
         ]),
-        // ts.factory.createTypeReferenceNode(
-        //     "And",
-        //     [
-        //         ts.factory.createTypeReferenceNode(
-        //             "Impl",
-        //             [
-        //                 ts.factory.createTypeReferenceNode(
-        //                     "A",
-        //                     undefined,
-        //                 ),
-        //                 ts.factory.createTypeReferenceNode(
-        //                     "B",
-        //                     undefined,
-        //                 ),
-        //             ],
-        //         ),
-        //         ts.factory.createTypeReferenceNode(
-        //             "Impl",
-        //             [
-        //                 ts.factory.createTypeReferenceNode(
-        //                     "B",
-        //                     undefined,
-        //                 ),
-        //                 ts.factory.createTypeReferenceNode(
-        //                     "A",
-        //                     undefined,
-        //                 ),
-        //             ],
-        //         ),
-        //     ],
-        // ),
     );
 
 export const createNotDeclaration = () =>
@@ -167,19 +101,6 @@ export const createNotDeclaration = () =>
         "Not",
         [typeParameter("A")],
         typeReference(["Impl", ["A", "False"]]),
-        // ts.factory.createTypeReferenceNode(
-        //     "Impl",
-        //     [
-        //         ts.factory.createTypeReferenceNode(
-        //             "A",
-        //             undefined,
-        //         ),
-        //         ts.factory.createTypeReferenceNode(
-        //             "False",
-        //             undefined,
-        //         ),
-        //     ],
-        // ),
     );
 
 const parameter = (name: string, type: ts.TypeReferenceNode) =>
@@ -197,7 +118,7 @@ export const basicDecl = (name: string, value: ts.Expression): ts.VariableStatem
         undefined,
         ts.factory.createVariableDeclarationList(
             [ts.factory.createVariableDeclaration(name, undefined, undefined, value)],
-            // what is the difference between these?
+            // There is also a ts.NodeFlags.Constant. what is the difference between these?
             ts.NodeFlags.Const,
         ),
     );
@@ -279,5 +200,77 @@ export const createModusPonens = () =>
             ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
                 ts.factory.createIdentifier("a"),
             ]),
+        ),
+    );
+
+export const createModusTollens = () =>
+    basicDecl(
+        "modusTollens",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A"), typeParameter("B")],
+            [parameter("aToB", typeReference(["Impl", ["A", "B"]])), parameter("notB", typeReference(["Not", ["B"]]))],
+            typeReference(["Not", ["A"]]),
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                undefined,
+                [parameter("a", typeReference("A"))],
+                undefined,
+                undefined,
+                ts.factory.createCallExpression(ts.factory.createIdentifier("notB"), undefined, [
+                    ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
+                        ts.factory.createIdentifier("a"),
+                    ]),
+                ]),
+            ),
+        ),
+    );
+
+export const createOrIntroLeft = () =>
+    basicDecl(
+        "orIntroLeft",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A"), typeParameter("B")],
+            [parameter("right", typeReference("B"))],
+            typeReference(["Or", ["A", "B"]]),
+            undefined,
+            ts.factory.createParenthesizedExpression(
+                ts.factory.createObjectLiteralExpression(
+                    [
+                        ts.factory.createPropertyAssignment(
+                            ts.factory.createIdentifier("_isLeft"),
+                            ts.factory.createFalse(),
+                        ),
+                        ts.factory.createShorthandPropertyAssignment(ts.factory.createIdentifier("right"), undefined),
+                    ],
+                    false,
+                ),
+            ),
+        ),
+    );
+
+export const createOrIntroRight = () =>
+    basicDecl(
+        "orIntroRight",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A"), typeParameter("B")],
+            [parameter("left", typeReference("A"))],
+            typeReference(["Or", ["A", "B"]]),
+            undefined,
+            ts.factory.createParenthesizedExpression(
+                ts.factory.createObjectLiteralExpression(
+                    [
+                        ts.factory.createPropertyAssignment(
+                            ts.factory.createIdentifier("_isLeft"),
+                            ts.factory.createTrue(),
+                        ),
+                        ts.factory.createShorthandPropertyAssignment(ts.factory.createIdentifier("left"), undefined),
+                    ],
+                    false,
+                ),
+            ),
         ),
     );
