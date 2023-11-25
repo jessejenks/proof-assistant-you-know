@@ -1,213 +1,147 @@
 import * as ts from "typescript";
-import {
-    Document,
-    Proof,
-    Assumption,
-    Step,
-    Implication,
-    Disjunction,
-    Conjunction,
-    Negation,
-    Identifier,
-    True,
-    False,
-    Statement,
-} from "./parser/parser";
-import { Visitor } from "./parser/visitor";
+import { Document, Justification, Assumption, Theorem, Step, Proof, AstKind, Expression } from "./parser/parser";
+import { TypeRefTree, typeReference, func, parameter } from "./tsUtils";
 
-// Note: we can't just optimize out `_` return cases. i.e. not all `const _x0 = ...; return _x0;` can just be `return ...`;
-// This is because we need the declaration when the variable has an annotation
-// i.e. `const _x0: Expression = ...; return _x0;`
-// maybe we can optimize out when there isn't an annotation, but that's tricky too.
+type Frame = Record<string, 0>;
 
-type Frame = {
-    freeVariables: Record<string, 0>;
-    lastName: string | null;
+const enterFrame = (frames: Frame[]) => {
+    frames.push({});
 };
 
-export class AstToTs extends Visitor<ts.Node> {
-    private frameStack: Frame[];
-    private varCounter: number;
-    constructor() {
-        super();
-        this.frameStack = [];
-        this.varCounter = 0;
-    }
+const addFreeVariable = (frames: Frame[], name: string) => {
+    if (name === "True" || name == "False") return;
+    frames[frames.length - 1][name] = 0;
+};
 
-    private addFreeVariable(name: string) {
-        this.frameStack[this.frameStack.length - 1].freeVariables[name] = 0;
-    }
+const exitFrame = (frames: Frame[]): string[] => {
+    const frame = frames.pop();
+    if (frame === undefined) throw new Error("No frame to exit");
+    const allFree = frames.reduce((acc, curr) => ({ ...acc, ...curr }), {});
+    Object.keys(allFree).forEach((k) => {
+        delete frame[k];
+    });
+    return Object.keys(frame);
+};
 
-    private setLastName(name: string) {
-        this.frameStack[this.frameStack.length - 1].lastName = name;
-    }
+const typeRefToName = (tree: TypeRefTree, id: number = 0): string =>
+    typeof tree === "string" ? `${tree.toLowerCase()}${id}` : `${tree[0]}_${tree[1].map(typeRefToName).join("")}_`;
 
-    private getLastName() {
-        return this.frameStack[this.frameStack.length - 1].lastName;
-    }
+const handleJustification = (frames: Frame[], justification: Justification) =>
+    justification.expressions.reduce(
+        (acc, curr) =>
+            ts.factory.createCallExpression(acc, undefined, [
+                ts.factory.createIdentifier(typeRefToName(handleExpression(frames, curr))),
+            ]),
+        ts.factory.createCallExpression(ts.factory.createIdentifier(justification.rule), undefined, []),
+    );
 
-    private getAllFree() {
-        let combined: Record<string, 0> = {};
-        this.frameStack.forEach(({ freeVariables }) => {
-            combined = { ...combined, ...freeVariables };
-        });
-        return combined;
-    }
+const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expression => {
+    const assumptions = assumption.assumptions.map((e) => {
+        enterFrame(frames);
+        return handleExpression(frames, e);
+    });
+    const body = handleProof(frames, assumption.subproof);
+    const assumptionsCopy = [...assumptions];
+    const tp = assumptionsCopy.pop()!;
+    const typeVars = exitFrame(frames);
+    const f = func([parameter(typeRefToName(tp), typeReference(tp))], typeVars, undefined, body);
+    return assumptionsCopy.reduceRight((ret, tp) => {
+        const typeVars = exitFrame(frames);
+        const f = func(
+            [parameter(typeRefToName(tp), typeReference(tp))],
+            typeVars,
+            undefined,
+            ts.factory.createBlock([ts.factory.createReturnStatement(ret)]),
+        );
+        return f;
+    }, f as ts.Expression);
+};
 
-    private getName(name: { name: string }): string {
-        if (name.name === "_") {
-            const n = `_x${this.varCounter}`;
-            this.varCounter++;
-            this.setLastName(n);
-            return n;
-        }
-        this.setLastName(name.name);
-        return name.name;
-    }
-
-    private makeBody(stmts: Statement[]): ts.Block {
-        const visited = stmts.map(this.visit) as ts.Statement[];
-        const lastName = this.getLastName();
-        if (lastName === null) throw new Error("No name to return");
-        visited.push(ts.factory.createReturnStatement(ts.factory.createIdentifier(lastName)));
-        return ts.factory.createBlock(visited);
-    }
-
-    visitDocument = (node: Document): ts.Block => ts.factory.createBlock(node.proofs.map(this.visitProof));
-
-    visitProof = (node: Proof): ts.Statement => {
-        this.frameStack.push({
-            freeVariables: {},
-            lastName: null,
-        });
-        this.varCounter = 0;
-        const tp = this.visit(node.expression) as ts.TypeNode;
-        const parameters = node.hypotheses.map(([name, type]) =>
-            ts.factory.createParameterDeclaration(
-                undefined,
-                undefined,
-                ts.factory.createIdentifier(name.name),
-                undefined,
-                this.visit(type) as ts.TypeNode,
+const handleStep = (frames: Frame[], step: Step): [ts.VariableStatement, string] => {
+    const call = handleJustification(frames, step.justification);
+    const tp = handleExpression(frames, step.have);
+    const name = typeRefToName(tp);
+    return [
+        ts.factory.createVariableStatement(
+            undefined,
+            ts.factory.createVariableDeclarationList(
+                [ts.factory.createVariableDeclaration(name, undefined, typeReference(tp), call)],
+                // TODO: How to deal with repeats? Shouldn't happen but also shouldn't fail because of that either?
+                ts.NodeFlags.Const,
             ),
-        );
-        const body = this.makeBody(node.justifications);
-        const popped = this.frameStack.pop();
-        return ts.factory.createExpressionStatement(
-            ts.factory.createArrowFunction(
-                undefined,
-                popped === undefined
-                    ? undefined
-                    : Object.keys(popped.freeVariables)
-                          .sort()
-                          .map((x) =>
-                              ts.factory.createTypeParameterDeclaration(undefined, ts.factory.createIdentifier(x)),
-                          ),
-                parameters,
-                tp,
-                undefined,
-                body,
-            ),
-        );
-    };
+        ),
+        name,
+    ];
+};
 
-    visitAssumption = (node: Assumption) => {
-        const name = this.getName({ name: "_" });
-        this.frameStack.push({
-            freeVariables: {},
-            lastName: null,
-        });
-        const parameter = ts.factory.createParameterDeclaration(
-            undefined,
-            undefined,
-            ts.factory.createIdentifier(this.getName(node.name)),
-            undefined,
-            this.visit(node.value) as ts.TypeNode,
-        );
-        const body = this.makeBody(node.subproof);
-        const popped = this.frameStack.pop();
-        if (popped) {
-            Object.keys(this.getAllFree()).forEach((k) => {
-                delete popped.freeVariables[k];
-            });
-        }
+const handleTheorem = (frames: Frame[], node: Theorem): ts.Statement => {
+    enterFrame(frames);
+    const expr = handleExpression(frames, node.expression);
+    const tp = typeReference(expr);
+    const body = handleProof(frames, node.proof);
+    const typeVars = exitFrame(frames);
+    const f = func([], typeVars, tp, body);
+    if (node.name === null) {
+        return ts.factory.createExpressionStatement(f);
+    } else {
         return ts.factory.createVariableStatement(
             undefined,
             ts.factory.createVariableDeclarationList(
-                [
-                    ts.factory.createVariableDeclaration(
-                        name,
-                        undefined,
-                        undefined,
-                        ts.factory.createArrowFunction(
-                            undefined,
-                            popped === undefined
-                                ? undefined
-                                : Object.keys(popped.freeVariables)
-                                      .sort()
-                                      .map((x) =>
-                                          ts.factory.createTypeParameterDeclaration(
-                                              undefined,
-                                              ts.factory.createIdentifier(x),
-                                          ),
-                                      ),
-                            [parameter],
-                            undefined,
-                            undefined,
-                            body,
-                        ),
-                    ),
-                ],
+                [ts.factory.createVariableDeclaration(ts.factory.createIdentifier(node.name), undefined, undefined, f)],
                 ts.NodeFlags.Const,
             ),
         );
-    };
+    }
+};
 
-    visitStep = (node: Step) => {
-        const name = this.getName(node.name);
-        const tp = node.value === null ? undefined : (this.visit(node.value) as ts.TypeNode);
-        const [caller, ...args] = node.justifications.map((n) => ts.factory.createIdentifier(n.name));
-        return ts.factory.createVariableStatement(
-            undefined,
-            ts.factory.createVariableDeclarationList(
-                [
-                    ts.factory.createVariableDeclaration(
-                        name,
-                        undefined,
-                        tp,
-                        args.length === 0 ? caller : ts.factory.createCallExpression(caller, undefined, args),
-                    ),
-                ],
-                ts.NodeFlags.Const,
-            ),
-        );
-    };
-
-    visitImplication = (node: Implication) =>
-        ts.factory.createTypeReferenceNode("Impl", [
-            this.visit(node.left) as ts.TypeNode,
-            this.visit(node.right) as ts.TypeNode,
-        ]);
-    visitDisjunction = (node: Disjunction) =>
-        ts.factory.createTypeReferenceNode("Or", [
-            this.visit(node.left) as ts.TypeNode,
-            this.visit(node.right) as ts.TypeNode,
-        ]);
-    visitConjunction = (node: Conjunction) =>
-        ts.factory.createTypeReferenceNode("And", [
-            this.visit(node.left) as ts.TypeNode,
-            this.visit(node.right) as ts.TypeNode,
-        ]);
-    visitNegation = (node: Negation) =>
-        ts.factory.createTypeReferenceNode("Not", [this.visit(node.value) as ts.TypeNode]);
-    visitIdentifier = (node: Identifier) => {
-        // we're assuming all identifiers that make it here are in a type expression
-        // other kinds of identifiers should be manually handled
-        if (node.name !== "True" && node.name !== "False") {
-            this.addFreeVariable(node.name);
+const handleProof = (frames: Frame[], proof: Proof): ts.ConciseBody => {
+    const body: ts.Statement[] = proof.statements.map((s) => {
+        switch (s.kind) {
+            case AstKind.Assumption:
+                return ts.factory.createExpressionStatement(handleAssumption(frames, s));
+            case AstKind.Step: {
+                const [decl] = handleStep(frames, s);
+                return decl;
+            }
         }
-        return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(node.name));
-    };
-    visitTrue = (_: True) => ts.factory.createTypeReferenceNode("True");
-    visitFalse = (_: False) => ts.factory.createTypeReferenceNode("False");
-}
+    });
+    let retExp: ts.Expression;
+    switch (proof.finalStep.kind) {
+        case AstKind.Justification: {
+            retExp = handleJustification(frames, proof.finalStep);
+            break;
+        }
+        case AstKind.Assumption: {
+            retExp = handleAssumption(frames, proof.finalStep);
+            break;
+        }
+        case AstKind.Step: {
+            const [decl, name] = handleStep(frames, proof.finalStep);
+            body.push(decl);
+            retExp = ts.factory.createIdentifier(name);
+        }
+    }
+    return body.length === 0 ? retExp : ts.factory.createBlock(body.concat(ts.factory.createReturnStatement(retExp)));
+};
+
+const handleExpression = (frames: Frame[], expr: Expression): TypeRefTree => {
+    switch (expr.kind) {
+        case AstKind.Implication:
+            return ["Impl", [handleExpression(frames, expr.left), handleExpression(frames, expr.right)]];
+        case AstKind.Disjunction:
+            return ["Or", [handleExpression(frames, expr.left), handleExpression(frames, expr.right)]];
+        case AstKind.Conjunction:
+            return ["And", [handleExpression(frames, expr.left), handleExpression(frames, expr.right)]];
+        case AstKind.Negation:
+            return ["Not", [handleExpression(frames, expr.value)]];
+        case AstKind.TypeVar: {
+            addFreeVariable(frames, expr.name);
+            return expr.name;
+        }
+    }
+};
+
+export const toStatements = (root: Document): ts.Statement[] => {
+    const frames: Frame[] = [];
+    return root.proofs.map((p) => handleTheorem(frames, p));
+};
