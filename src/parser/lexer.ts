@@ -4,18 +4,19 @@ export enum TokenKind {
     RParen,
     LFlatBracket,
     RFlatBracket,
+    LBrace,
+    RBrace,
     Implies,
     Colon,
     Comma,
-    Semi,
     And,
     Or,
     Not,
-    True,
-    False,
+    TypeVar,
     Identifier,
     AssumeKeyword,
     ByKeyword,
+    HaveKeyword,
     TheoremKeyword,
 }
 
@@ -25,18 +26,21 @@ const KIND_TO_NAME: Record<TokenKind, string> = {
     [TokenKind.RParen]: "RParen",
     [TokenKind.LFlatBracket]: "LFlatBracket",
     [TokenKind.RFlatBracket]: "RFlatBracket",
+    [TokenKind.LBrace]: "LBrace",
+    [TokenKind.RBrace]: "RBrace",
     [TokenKind.Implies]: "Implies",
     [TokenKind.Colon]: "Colon",
     [TokenKind.Comma]: "Comma",
-    [TokenKind.Semi]: "Semi",
     [TokenKind.And]: "And",
     [TokenKind.Or]: "Or",
     [TokenKind.Not]: "Not",
-    [TokenKind.True]: "True",
-    [TokenKind.False]: "False",
+    // [TokenKind.True]: "True",
+    // [TokenKind.False]: "False",
+    [TokenKind.TypeVar]: "TypeVar",
     [TokenKind.Identifier]: "Identifier",
     [TokenKind.AssumeKeyword]: "AssumeKeyword",
     [TokenKind.ByKeyword]: "ByKeyword",
+    [TokenKind.HaveKeyword]: "HaveKeyword",
     [TokenKind.TheoremKeyword]: "TheoremKeyword",
 };
 
@@ -54,26 +58,31 @@ export type Token =
     | { kind: TokenKind.RParen; location: Location }
     | { kind: TokenKind.LFlatBracket; location: Location }
     | { kind: TokenKind.RFlatBracket; location: Location }
+    | { kind: TokenKind.LBrace; location: Location }
+    | { kind: TokenKind.RBrace; location: Location }
     | { kind: TokenKind.Implies; location: Location }
     | { kind: TokenKind.Colon; location: Location }
     | { kind: TokenKind.Comma; location: Location }
-    | { kind: TokenKind.Semi; location: Location }
     | { kind: TokenKind.And; location: Location }
     | { kind: TokenKind.Or; location: Location }
     | { kind: TokenKind.Not; location: Location }
-    | { kind: TokenKind.True; location: Location }
-    | { kind: TokenKind.False; location: Location }
+    | { kind: TokenKind.TypeVar; value: string; location: Location }
     | { kind: TokenKind.Identifier; value: string; location: Location }
     | { kind: TokenKind.AssumeKeyword; location: Location }
     | { kind: TokenKind.ByKeyword; location: Location }
+    | { kind: TokenKind.HaveKeyword; location: Location }
     | { kind: TokenKind.TheoremKeyword; location: Location };
 
-const IDENTIFIER = /[a-zA-Z0-9_-]/;
-const KEYWORDS_AND_LITERALS = {
-    true: TokenKind.True,
-    false: TokenKind.False,
+const TYPEVAR_START = /[A-Z]/;
+const TYPEVAR = /[a-zA-Z]/;
+
+const IDENTIFIER_START = /[a-z]/;
+const IDENTIFIER = /[a-zA-Z0-9]/;
+
+const KEYWORDS = {
     assume: TokenKind.AssumeKeyword,
     by: TokenKind.ByKeyword,
+    have: TokenKind.HaveKeyword,
     theorem: TokenKind.TheoremKeyword,
 };
 
@@ -84,7 +93,11 @@ export class Lexer {
     location: Location;
     private currentToken: Token | null;
 
-    constructor(input: string) {
+    constructor(input?: string) {
+        this.setInput(input === undefined ? "" : input);
+    }
+
+    setInput(input: string) {
         this.input = input;
         this.index = 0;
         this.location = { line: 1, column: 1 };
@@ -119,8 +132,6 @@ export class Lexer {
     private readSymbol(): Token | null {
         while (!this.eof()) {
             switch (this.currentChar()) {
-                case ";":
-                    return { kind: TokenKind.Semi, location: this.getLocation() };
                 case ",":
                     return { kind: TokenKind.Comma, location: this.getLocation() };
                 case ":":
@@ -133,6 +144,10 @@ export class Lexer {
                     return { kind: TokenKind.LFlatBracket, location: this.getLocation() };
                 case "]":
                     return { kind: TokenKind.RFlatBracket, location: this.getLocation() };
+                case "{":
+                    return { kind: TokenKind.LBrace, location: this.getLocation() };
+                case "}":
+                    return { kind: TokenKind.RBrace, location: this.getLocation() };
                 case "&":
                     return { kind: TokenKind.And, location: this.getLocation() };
                 case "=": {
@@ -179,15 +194,27 @@ export class Lexer {
     private readWord(): Token | null {
         const location = this.getLocation(false);
         const start = this.index;
-        while (!this.eof() && IDENTIFIER.test(this.currentChar())) {
+        if (IDENTIFIER_START.test(this.currentChar())) {
             this.index++;
-        }
-        if (this.index > start) {
-            const value = this.input.slice(start, this.index);
-            if (value in KEYWORDS_AND_LITERALS) {
-                return { kind: KEYWORDS_AND_LITERALS[value], location };
-            } else {
-                return { kind: TokenKind.Identifier, value, location };
+            while (!this.eof() && IDENTIFIER.test(this.currentChar())) {
+                this.index++;
+            }
+            if (this.index > start) {
+                const value = this.input.slice(start, this.index);
+                if (value in KEYWORDS) {
+                    return { kind: KEYWORDS[value], location };
+                } else {
+                    return { kind: TokenKind.Identifier, value, location };
+                }
+            }
+        } else if (TYPEVAR_START.test(this.currentChar())) {
+            this.index++;
+            while (!this.eof() && TYPEVAR.test(this.currentChar())) {
+                this.index++;
+            }
+            if (this.index > start) {
+                const value = this.input.slice(start, this.index);
+                return { kind: TokenKind.TypeVar, value, location };
             }
         }
         return null;
