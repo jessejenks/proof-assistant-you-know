@@ -1,29 +1,21 @@
 import * as ts from "typescript";
+import { typeParameter, typeReference, parameter } from "./tsUtils";
 
-export const createTrue = () =>
+export const createTrueType = () =>
     ts.factory.createTypeAliasDeclaration(
         undefined,
         "True",
         undefined,
-        ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("_true")),
+        ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("true_")),
     );
 
-export const createFalse = () =>
+export const createFalseType = () =>
     ts.factory.createTypeAliasDeclaration(
         undefined,
         "False",
         undefined,
         ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
     );
-
-const typeParameter = (name: string) =>
-    ts.factory.createTypeParameterDeclaration(undefined, ts.factory.createIdentifier(name), undefined, undefined);
-
-type TypeRefTree = string | [string, TypeRefTree[]];
-const typeReference = (tree: TypeRefTree) =>
-    typeof tree === "string"
-        ? ts.factory.createTypeReferenceNode(tree)
-        : ts.factory.createTypeReferenceNode(tree[0], tree[1].map(typeReference));
 
 export const createAndDeclaration = () =>
     ts.factory.createTypeAliasDeclaration(
@@ -103,16 +95,6 @@ export const createNotDeclaration = () =>
         typeReference(["Impl", ["A", "False"]]),
     );
 
-const parameter = (name: string, type: ts.TypeReferenceNode) =>
-    ts.factory.createParameterDeclaration(
-        undefined,
-        undefined,
-        ts.factory.createIdentifier(name),
-        undefined,
-        type,
-        undefined,
-    );
-
 export const basicDecl = (name: string, value: ts.Expression): ts.VariableStatement =>
     ts.factory.createVariableStatement(
         undefined,
@@ -128,13 +110,27 @@ export const createAndIntro = () =>
         "andIntro",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("left", typeReference("A")), parameter("right", typeReference("B"))],
-            typeReference(["And", ["A", "B"]]),
             undefined,
-            ts.factory.createArrayLiteralExpression(
-                [ts.factory.createIdentifier("left"), ts.factory.createIdentifier("right")],
-                false,
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A")],
+                [parameter("left", typeReference("A"))],
+                undefined,
+                undefined,
+                ts.factory.createArrowFunction(
+                    undefined,
+                    [typeParameter("B")],
+                    [parameter("right", typeReference("B"))],
+                    typeReference(["And", ["A", "B"]]),
+                    undefined,
+                    ts.factory.createArrayLiteralExpression(
+                        [ts.factory.createIdentifier("left"), ts.factory.createIdentifier("right")],
+                        false,
+                    ),
+                ),
             ),
         ),
     );
@@ -144,22 +140,21 @@ export const createAndElimLeft = () =>
         "andElimLeft",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [
-                ts.factory.createParameterDeclaration(
-                    undefined,
-                    undefined,
-                    ts.factory.createArrayBindingPattern([
-                        ts.factory.createBindingElement(undefined, undefined, ts.factory.createIdentifier("left")),
-                        ts.factory.createBindingElement(undefined, undefined, ts.factory.createIdentifier("_")),
-                    ]),
-                    undefined,
-                    typeReference(["And", ["A", "B"]]),
-                ),
-            ],
-            ts.factory.createTypeReferenceNode("A"),
             undefined,
-            ts.factory.createIdentifier("left"),
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("and", typeReference(["And", ["A", "B"]]))],
+                typeReference("A"),
+                undefined,
+                ts.factory.createElementAccessExpression(
+                    ts.factory.createIdentifier("and"),
+                    ts.factory.createNumericLiteral("0"),
+                ),
+            ),
         ),
     );
 
@@ -168,23 +163,21 @@ export const createAndElimRight = () =>
         "andElimRight",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [
-                ts.factory.createParameterDeclaration(
-                    undefined,
-                    undefined,
-                    ts.factory.createArrayBindingPattern([
-                        ts.factory.createBindingElement(undefined, undefined, ts.factory.createIdentifier("_")),
-                        ts.factory.createBindingElement(undefined, undefined, ts.factory.createIdentifier("right")),
-                    ]),
-                    undefined,
-                    typeReference(["And", ["A", "B"]]),
-                    undefined,
-                ),
-            ],
-            typeReference("B"),
             undefined,
-            ts.factory.createIdentifier("right"),
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("and", typeReference(["And", ["A", "B"]]))],
+                typeReference("B"),
+                undefined,
+                ts.factory.createElementAccessExpression(
+                    ts.factory.createIdentifier("and"),
+                    ts.factory.createNumericLiteral("1"),
+                ),
+            ),
         ),
     );
 
@@ -193,13 +186,27 @@ export const createModusPonens = () =>
         "modusPonens",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("aToB", typeReference(["Impl", ["A", "B"]])), parameter("a", typeReference("A"))],
-            typeReference("B"),
             undefined,
-            ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
-                ts.factory.createIdentifier("a"),
-            ]),
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
+                undefined,
+                undefined,
+                ts.factory.createArrowFunction(
+                    undefined,
+                    undefined,
+                    [parameter("a", typeReference("A"))],
+                    typeReference("B"),
+                    undefined,
+                    ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
+                        ts.factory.createIdentifier("a"),
+                    ]),
+                ),
+            ),
         ),
     );
 
@@ -232,20 +239,30 @@ export const createOrIntroLeft = () =>
         "orIntroLeft",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("right", typeReference("B"))],
-            typeReference(["Or", ["A", "B"]]),
             undefined,
-            ts.factory.createParenthesizedExpression(
-                ts.factory.createObjectLiteralExpression(
-                    [
-                        ts.factory.createPropertyAssignment(
-                            ts.factory.createIdentifier("_isLeft"),
-                            ts.factory.createFalse(),
-                        ),
-                        ts.factory.createShorthandPropertyAssignment(ts.factory.createIdentifier("right"), undefined),
-                    ],
-                    false,
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("right", typeReference("B"))],
+                typeReference(["Or", ["A", "B"]]),
+                undefined,
+                ts.factory.createParenthesizedExpression(
+                    ts.factory.createObjectLiteralExpression(
+                        [
+                            ts.factory.createPropertyAssignment(
+                                ts.factory.createIdentifier("_isLeft"),
+                                ts.factory.createFalse(),
+                            ),
+                            ts.factory.createShorthandPropertyAssignment(
+                                ts.factory.createIdentifier("right"),
+                                undefined,
+                            ),
+                        ],
+                        false,
+                    ),
                 ),
             ),
         ),
@@ -256,21 +273,117 @@ export const createOrIntroRight = () =>
         "orIntroRight",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("left", typeReference("A"))],
-            typeReference(["Or", ["A", "B"]]),
             undefined,
-            ts.factory.createParenthesizedExpression(
-                ts.factory.createObjectLiteralExpression(
-                    [
-                        ts.factory.createPropertyAssignment(
-                            ts.factory.createIdentifier("_isLeft"),
-                            ts.factory.createTrue(),
-                        ),
-                        ts.factory.createShorthandPropertyAssignment(ts.factory.createIdentifier("left"), undefined),
-                    ],
-                    false,
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("left", typeReference("A"))],
+                typeReference(["Or", ["A", "B"]]),
+                undefined,
+                ts.factory.createParenthesizedExpression(
+                    ts.factory.createObjectLiteralExpression(
+                        [
+                            ts.factory.createPropertyAssignment(
+                                ts.factory.createIdentifier("_isLeft"),
+                                ts.factory.createTrue(),
+                            ),
+                            ts.factory.createShorthandPropertyAssignment(
+                                ts.factory.createIdentifier("left"),
+                                undefined,
+                            ),
+                        ],
+                        false,
+                    ),
                 ),
+            ),
+        ),
+    );
+
+export const createTrueTheorem = () =>
+    basicDecl(
+        "true_",
+        ts.factory.createArrowFunction(
+            undefined,
+            undefined,
+            [],
+            typeReference("True"),
+            undefined,
+            ts.factory.createStringLiteral("true_"),
+        ),
+    );
+
+export const createOrElim = () =>
+    basicDecl(
+        "orElim",
+        ts.factory.createArrowFunction(
+            undefined,
+            undefined,
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("or", typeReference(["Or", ["A", "B"]]))],
+                undefined,
+                undefined,
+                ts.factory.createArrowFunction(
+                    undefined,
+                    [typeParameter("C")],
+                    [parameter("aToC", typeReference(["Impl", ["A", "C"]]))],
+                    undefined,
+                    undefined,
+                    ts.factory.createArrowFunction(
+                        undefined,
+                        undefined,
+                        [parameter("bToC", typeReference(["Impl", ["B", "C"]]))],
+                        typeReference("C"),
+                        undefined,
+                        ts.factory.createConditionalExpression(
+                            ts.factory.createPropertyAccessExpression(
+                                ts.factory.createIdentifier("or"),
+                                ts.factory.createIdentifier("_isLeft"),
+                            ),
+                            ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+                            ts.factory.createCallExpression(ts.factory.createIdentifier("aToC"), undefined, [
+                                ts.factory.createPropertyAccessExpression(
+                                    ts.factory.createIdentifier("or"),
+                                    ts.factory.createIdentifier("left"),
+                                ),
+                            ]),
+                            ts.factory.createToken(ts.SyntaxKind.ColonToken),
+                            ts.factory.createCallExpression(ts.factory.createIdentifier("bToC"), undefined, [
+                                ts.factory.createPropertyAccessExpression(
+                                    ts.factory.createIdentifier("or"),
+                                    ts.factory.createIdentifier("right"),
+                                ),
+                            ]),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+
+export const createExact = () =>
+    basicDecl(
+        "exact",
+        ts.factory.createArrowFunction(
+            undefined,
+            undefined,
+            [],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                [typeParameter("A")],
+                [parameter("a", typeReference("A"))],
+                undefined,
+                undefined,
+                ts.factory.createIdentifier("a"),
             ),
         ),
     );
