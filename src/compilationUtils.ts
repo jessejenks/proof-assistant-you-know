@@ -62,14 +62,48 @@ export const diagnosticsToString = (diagnostics: readonly ts.Diagnostic[]): stri
 //     // return "";
 // }
 
+const getCompilerOptions = (): ts.CompilerOptions => ({
+    strict: true,
+    noImplicitAny: true,
+    strictNullChecks: true,
+    strictFunctionTypes: true,
+    strictPropertyInitialization: true,
+    strictBindCallApply: true,
+    noImplicitThis: true,
+    noImplicitReturns: true,
+    noUncheckedIndexedAccess: false,
+    useDefineForClassFields: false,
+    alwaysStrict: true,
+    allowUnreachableCode: false,
+    allowUnusedLabels: false,
+    downlevelIteration: false,
+    noEmitHelpers: false,
+    noLib: false,
+    noStrictGenericChecks: false,
+    noUnusedLocals: false,
+    noUnusedParameters: false,
+    preserveConstEnums: false,
+    removeComments: false,
+    skipLibCheck: false,
+    checkJs: false,
+    allowJs: false,
+    importHelpers: false,
+    experimentalDecorators: true,
+    emitDecoratorMetadata: true,
+    moduleResolution: undefined,
+    target: ts.ScriptTarget.ES2017,
+    jsx: ts.JsxEmit.None,
+    module: ts.ModuleKind.None,
+    esModuleInterop: false,
+    declaration: false,
+    suppressOutputPathCheck: true,
+    allowNonTsExtensions: true,
+    listEmittedFiles: true,
+});
+
 export const compile = (sourceText: string): Result<Unit, readonly ts.Diagnostic[]> => {
-    const sourceFile = ts.createSourceFile("module.ts", sourceText, ts.ScriptTarget.ES2015, false, ts.ScriptKind.TS);
-    const options: ts.CompilerOptions = {
-        jsx: ts.JsxEmit.None,
-        suppressOutputPathCheck: true,
-        allowNonTsExtensions: true,
-        listEmittedFiles: true,
-    };
+    const sourceFile = ts.createSourceFile("At ", sourceText, ts.ScriptTarget.ES2017, false, ts.ScriptKind.TS);
+    const options: ts.CompilerOptions = getCompilerOptions();
     const host: ts.CompilerHost = {
         getSourceFile: (filename) => (filename == sourceFile.fileName ? sourceFile : undefined),
         writeFile: (name) => {

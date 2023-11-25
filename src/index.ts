@@ -1,26 +1,29 @@
 import * as fs from "fs";
-import { statementsToFile, fileToString, compile, diagnosticsToString } from "./compilationUtils";
+import * as ts from "typescript";
 import { Timer } from "./utils";
+import { statementsToFile, fileToString, compile, diagnosticsToString } from "./compilationUtils";
+import { Parser } from "./parser/parser";
 import {
-    createTrue,
-    createFalse,
+    createTrueType,
+    createFalseType,
     createAndDeclaration,
     createOrDeclaration,
     createImplDeclaration,
     createEquivDeclaration,
     createNotDeclaration,
+    createTrueTheorem,
     createAndIntro,
     createAndElimLeft,
     createAndElimRight,
-    createModusPonens,
-    createModusTollens,
     createOrIntroLeft,
     createOrIntroRight,
+    createOrElim,
+    createModusPonens,
+    createExact,
 } from "./primitives";
+import { toStatements } from "./astToTs";
 import { Lexer } from "./parser/lexer";
-import { Parser } from "./parser/parser";
-import { PrettyPrinter } from "./parser/visitor";
-import { AstToTs } from "./astToTs";
+import { prettyPrint } from "./prettyPrint";
 
 let start: [number, number];
 
@@ -45,7 +48,7 @@ Timer.elapsed(start);
 
 start = Timer.start();
 console.log("Begin formatting");
-const recreated = new PrettyPrinter().visit(parsed);
+const recreated = prettyPrint(parsed);
 Timer.elapsed(start);
 console.log(
     recreated
@@ -54,48 +57,45 @@ console.log(
         .join("\n"),
 );
 
-console.log("Initializing...");
-start = Timer.start();
-const astToTs = new AstToTs();
-Timer.elapsed(start);
-
 console.log("Transforming...");
 start = Timer.start();
-const transformed = parsed.proofs.map(astToTs.visitProof);
+const statements = toStatements(parsed);
 Timer.elapsed(start);
 
 console.log("generating...");
 start = Timer.start();
-const sourceFile = statementsToFile([
-    createTrue(),
-    createFalse(),
-    createAndDeclaration(),
-    createOrDeclaration(),
-    createImplDeclaration(),
-    createEquivDeclaration(),
-    createNotDeclaration(),
-    createAndIntro(),
-    createAndElimLeft(),
-    createAndElimRight(),
-    createModusPonens(),
-    createModusTollens(),
-    createOrIntroLeft(),
-    createOrIntroRight(),
-    ...transformed,
-]);
-const text = fileToString(sourceFile);
-Timer.elapsed(start);
-// console.log(
-//     text
-//         .split("\n")
-//         .map((line, i) => `${String(i + 1).padStart(3, " ")} ${line}`)
-//         .join("\n"),
-// );
-console.log(text);
-console.log("compiling...");
-start = Timer.start();
+
+const text = fileToString(
+    statementsToFile([
+        createTrueType(),
+        createFalseType(),
+        createAndDeclaration(),
+        createOrDeclaration(),
+        createImplDeclaration(),
+        createEquivDeclaration(),
+        createNotDeclaration(),
+        createTrueTheorem(),
+        createAndIntro(),
+        createAndElimLeft(),
+        createAndElimRight(),
+        createOrIntroLeft(),
+        createOrIntroRight(),
+        createOrElim(),
+        createModusPonens(),
+        createExact(),
+        ...statements,
+    ]),
+);
+console.log("---");
+console.log(
+    text
+        .split("\n")
+        .map((line, i) => `${String(i + 1).padStart(3, " ")} ${line}`)
+        .join("\n"),
+);
+
+console.log(`Compiling with ts ${ts.version}`);
 const result = compile(text);
-Timer.elapsed(start);
 switch (result.kind) {
     case "ok":
         console.log("Success!");
