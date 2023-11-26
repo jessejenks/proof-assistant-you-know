@@ -47,7 +47,9 @@ const handleApplication = (application: Application) =>
     `${application.rule} ${application.arguments.map(handleIdentifierOrExpression).join(", ")}`;
 
 const handleJustification = (justification: Justification) =>
-    justification.kind === AstKind.Application ? handleApplication(justification) : handleAssumption(justification);
+    `by ${
+        justification.kind === AstKind.Application ? handleApplication(justification) : handleAssumption(justification)
+    }`;
 
 const handleStep = (step: Step) =>
     `have ${handleNamedExpression(step.expression)} by ${handleJustification(step.justification)}`;
