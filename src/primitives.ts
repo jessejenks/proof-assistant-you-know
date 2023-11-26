@@ -305,6 +305,19 @@ export const createOrElim = () =>
         ),
     );
 
+export const createAbsurd = () =>
+    basicDecl(
+        "absurd",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A")],
+            [parameter("_", typeReference("False"))],
+            undefined,
+            undefined,
+            ts.factory.createAsExpression(ts.factory.createStringLiteral("never"), typeReference("A")),
+        ),
+    );
+
 export const createExact = () =>
     basicDecl(
         "exact",
@@ -312,7 +325,7 @@ export const createExact = () =>
             undefined,
             [typeParameter("A")],
             [parameter("a", typeReference("A"))],
-            undefined,
+            typeReference("A"),
             undefined,
             ts.factory.createIdentifier("a"),
         ),
