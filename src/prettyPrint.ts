@@ -9,6 +9,7 @@ import {
     Assumption,
     Step,
     Justification,
+    Identifier,
 } from "./parser/parser";
 
 const handleExpression = (expression: Expression) => {
@@ -31,8 +32,11 @@ const handleExpression = (expression: Expression) => {
     }
 };
 
+const handleIdentifierOrExpression = (idOrExpr: Identifier | Expression) =>
+    idOrExpr.kind === AstKind.Identifier ? idOrExpr.name : handleExpression(idOrExpr);
+
 const handleJustification = (justification: Justification) =>
-    `${justification.rule} ${justification.expressions.map(handleExpression).join(", ")}`;
+    `${justification.rule} ${justification.expressions.map(handleIdentifierOrExpression).join(", ")}`;
 
 const handleAssumption = (assumption: Assumption) =>
     `assume ${assumption.assumptions.map(handleExpression).join(", ")} {\n${handleProof(assumption.subproof)}\n}`;

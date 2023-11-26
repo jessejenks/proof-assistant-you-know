@@ -9,7 +9,6 @@ const enterFrame = (frames: Frame[]) => {
 };
 
 const addFreeVariable = (frames: Frame[], name: string) => {
-    if (name === "True" || name == "False") return;
     frames[frames.length - 1][name] = 0;
 };
 
@@ -20,19 +19,40 @@ const exitFrame = (frames: Frame[]): string[] => {
     Object.keys(allFree).forEach((k) => {
         delete frame[k];
     });
+    if ("True" in frame) delete frame["True"];
+    if ("False" in frame) delete frame["False"];
     return Object.keys(frame);
 };
 
-const typeRefToName = (tree: TypeRefTree, id: number = 0): string =>
-    typeof tree === "string" ? `${tree.toLowerCase()}${id}` : `${tree[0]}_${tree[1].map(typeRefToName).join("")}_`;
+const JS_KEYWORDS = {
+    true: 0,
+    false: 0,
+    null: 0,
+    undefined: 0,
+};
+
+const escapeId = (name: string) => ts.factory.createIdentifier(name in JS_KEYWORDS ? `${name}_` : name);
+
+const typeRefToName = (tree: TypeRefTree, id: number = 0): string => {
+    if (typeof tree === "string") {
+        tree = tree.toLowerCase();
+        if (tree in JS_KEYWORDS) {
+            return `${tree}_`;
+        }
+        return `${tree}${id}`;
+    }
+    return `${tree[0]}_${tree[1].map(typeRefToName).join("")}_`;
+};
 
 const handleJustification = (frames: Frame[], justification: Justification) =>
     justification.expressions.reduce(
         (acc, curr) =>
             ts.factory.createCallExpression(acc, undefined, [
-                ts.factory.createIdentifier(typeRefToName(handleExpression(frames, curr))),
+                curr.kind === AstKind.Identifier
+                    ? ts.factory.createCallExpression(escapeId(curr.name), undefined, undefined)
+                    : ts.factory.createIdentifier(typeRefToName(handleExpression(frames, curr))),
             ]),
-        ts.factory.createCallExpression(ts.factory.createIdentifier(justification.rule), undefined, []),
+        ts.factory.createCallExpression(escapeId(justification.rule), undefined, []),
     );
 
 const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expression => {
@@ -43,17 +63,11 @@ const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expressio
     const body = handleProof(frames, assumption.subproof);
     const assumptionsCopy = [...assumptions];
     const tp = assumptionsCopy.pop()!;
-    const typeVars = exitFrame(frames);
+    let typeVars = exitFrame(frames);
     const f = func([parameter(typeRefToName(tp), typeReference(tp))], typeVars, undefined, body);
     return assumptionsCopy.reduceRight((ret, tp) => {
-        const typeVars = exitFrame(frames);
-        const f = func(
-            [parameter(typeRefToName(tp), typeReference(tp))],
-            typeVars,
-            undefined,
-            ts.factory.createBlock([ts.factory.createReturnStatement(ret)]),
-        );
-        return f;
+        typeVars = exitFrame(frames);
+        return func([parameter(typeRefToName(tp), typeReference(tp))], typeVars, undefined, ret);
     }, f as ts.Expression);
 };
 

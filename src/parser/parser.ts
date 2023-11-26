@@ -6,7 +6,7 @@ Statement     := Assumption | Step
 FinalStep     := Statement | Justification
 Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
 Step          := "have" Expression Justification
-Justification := "by" identifier Expression ("," Expression)*
+Justification := "by" identifier (identifier | Expression) ("," (identifier | Expression))*
 Expression    := Implication
 Implication   := Disjunction ("=>" Disjunction)*
 Disjunction   := Conjunction ("|" Conjunction)*
@@ -87,7 +87,7 @@ export type Step = {
 export type Justification = {
     kind: AstKind.Justification;
     rule: string;
-    expressions: Expression[];
+    expressions: (Identifier | Expression)[];
 };
 
 export type Expression = TypeVar | Negation | Conjunction | Disjunction | Implication;
@@ -229,14 +229,22 @@ export class Parser {
     }
 
     parseJustification(): Justification {
-        // Justification := "by" identifier Expression ("," Expression)*
+        // Justification := "by" identifier (identifier | Expression) ("," (identifier | Expression))*
         this.expect(TokenKind.ByKeyword);
         const { value: rule } = this.expect(TokenKind.Identifier);
-        const expressions: Expression[] = [this.parseExpression()];
+        const expressions: (Identifier | Expression)[] = [this.parseIdentifierOrExpression()];
         while (this.chompIfNextIs(TokenKind.Comma)) {
-            expressions.push(this.parseExpression());
+            expressions.push(this.parseIdentifierOrExpression());
         }
         return { kind: AstKind.Justification, rule, expressions };
+    }
+
+    private parseIdentifierOrExpression(): Identifier | Expression {
+        if (this.nextIs(TokenKind.Identifier)) {
+            const { value: name } = this.expect(TokenKind.Identifier);
+            return { kind: AstKind.Identifier, name };
+        }
+        return this.parseExpression();
     }
 
     parseExpression(): Expression {

@@ -4,7 +4,7 @@ export const typeParameter = (name: string) =>
     ts.factory.createTypeParameterDeclaration(undefined, ts.factory.createIdentifier(name), undefined, undefined);
 
 export type TypeRefTree = string | [string, TypeRefTree[]];
-export const typeReference = (tree: TypeRefTree) =>
+export const typeReference = (tree: TypeRefTree): ts.TypeReferenceNode =>
     typeof tree === "string"
         ? ts.factory.createTypeReferenceNode(tree)
         : ts.factory.createTypeReferenceNode(tree[0], tree[1].map(typeReference));
