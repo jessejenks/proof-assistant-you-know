@@ -77,7 +77,7 @@ const TYPEVAR_START = /[A-Z]/;
 const TYPEVAR = /[a-zA-Z]/;
 
 const IDENTIFIER_START = /[a-z]/;
-const IDENTIFIER = /[a-zA-Z0-9]/;
+const IDENTIFIER = /[a-zA-Z0-9_]/;
 
 const KEYWORDS = {
     assume: TokenKind.AssumeKeyword,
