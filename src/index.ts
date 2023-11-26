@@ -19,6 +19,7 @@ import {
     createOrIntroRight,
     createOrElim,
     createModusPonens,
+    createModusTollens,
     createExact,
 } from "./primitives";
 import { toStatements } from "./astToTs";
@@ -82,6 +83,7 @@ const text = fileToString(
         createOrIntroRight(),
         createOrElim(),
         createModusPonens(),
+        createModusTollens(),
         createExact(),
         ...statements,
     ]),

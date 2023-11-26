@@ -215,21 +215,35 @@ export const createModusTollens = () =>
         "modusTollens",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("aToB", typeReference(["Impl", ["A", "B"]])), parameter("notB", typeReference(["Not", ["B"]]))],
-            typeReference(["Not", ["A"]]),
+            undefined,
+            [],
+            undefined,
             undefined,
             ts.factory.createArrowFunction(
                 undefined,
+                [typeParameter("A"), typeParameter("B")],
+                [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
                 undefined,
-                [parameter("a", typeReference("A"))],
                 undefined,
-                undefined,
-                ts.factory.createCallExpression(ts.factory.createIdentifier("notB"), undefined, [
-                    ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
-                        ts.factory.createIdentifier("a"),
-                    ]),
-                ]),
+                ts.factory.createArrowFunction(
+                    undefined,
+                    undefined,
+                    [parameter("notB", typeReference(["Not", ["B"]]))],
+                    typeReference(["Not", ["A"]]),
+                    undefined,
+                    ts.factory.createArrowFunction(
+                        undefined,
+                        undefined,
+                        [parameter("a", typeReference("A"))],
+                        undefined,
+                        undefined,
+                        ts.factory.createCallExpression(ts.factory.createIdentifier("notB"), undefined, [
+                            ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
+                                ts.factory.createIdentifier("a"),
+                            ]),
+                        ]),
+                    ),
+                ),
             ),
         ),
     );
