@@ -11,7 +11,7 @@ import {
     Application,
 } from "./parser/parser";
 import { TypeRefTree, typeReference, func, parameter } from "./tsUtils";
-import { basicDecl } from "./primitives";
+import { basicDecl, typedDecl } from "./primitives";
 
 type Frame = Record<string, 0>;
 
@@ -65,10 +65,10 @@ const handleApplication = (frames: Frame[], application: Application) =>
         (acc, curr) =>
             ts.factory.createCallExpression(acc, undefined, [
                 curr.kind === AstKind.Identifier
-                    ? ts.factory.createCallExpression(escapeId(curr.name), undefined, undefined)
+                    ? escapeId(curr.name)
                     : ts.factory.createIdentifier(typeRefToName(handleExpression(frames, curr))),
             ]),
-        ts.factory.createCallExpression(escapeId(application.rule), undefined, []),
+        escapeId(application.rule) as ts.Expression,
     );
 
 const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expression => {
@@ -94,14 +94,8 @@ const handleStep = (frames: Frame[], step: Step): [ts.VariableStatement, string]
     const tp = handleExpression(frames, expression);
     const stepName = name === null ? typeRefToName(tp) : name;
     return [
-        ts.factory.createVariableStatement(
-            undefined,
-            ts.factory.createVariableDeclarationList(
-                [ts.factory.createVariableDeclaration(stepName, undefined, typeReference(tp), call)],
-                // TODO: How to deal with repeats? Shouldn't happen but also shouldn't fail because of that either?
-                ts.NodeFlags.Const,
-            ),
-        ),
+        // TODO: How to deal with repeats? Shouldn't happen but also shouldn't fail because of that either?
+        typedDecl(stepName, typeReference(tp), call),
         stepName,
     ];
 };
