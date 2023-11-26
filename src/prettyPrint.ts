@@ -10,6 +10,7 @@ import {
     Step,
     Justification,
     Identifier,
+    Application,
 } from "./parser/parser";
 
 const handleExpression = (expression: Expression) => {
@@ -35,11 +36,14 @@ const handleExpression = (expression: Expression) => {
 const handleIdentifierOrExpression = (idOrExpr: Identifier | Expression) =>
     idOrExpr.kind === AstKind.Identifier ? idOrExpr.name : handleExpression(idOrExpr);
 
-const handleJustification = (justification: Justification) =>
-    `${justification.rule} ${justification.expressions.map(handleIdentifierOrExpression).join(", ")}`;
-
 const handleAssumption = (assumption: Assumption) =>
     `assume ${assumption.assumptions.map(handleExpression).join(", ")} {\n${handleProof(assumption.subproof)}\n}`;
+
+const handleApplication = (application: Application) =>
+    `${application.rule} ${application.arguments.map(handleIdentifierOrExpression).join(", ")}`;
+
+const handleJustification = (justification: Justification) =>
+    justification.kind === AstKind.Application ? handleApplication(justification) : handleAssumption(justification);
 
 const handleStep = (step: Step) => `have ${handleExpression(step.have)} by ${handleJustification(step.justification)}`;
 
@@ -53,7 +57,7 @@ const handleStatement = (statement: Statement) => {
 };
 
 const handleFinalStep = (step: FinalStep) =>
-    step.kind === AstKind.Justification ? handleJustification(step) : handleStatement(step);
+    step.kind === AstKind.Step ? handleStatement(step) : handleJustification(step);
 
 const handleProof = (proof: Proof) =>
     proof.statements.map(handleStatement).concat(handleFinalStep(proof.finalStep)).join("\n");

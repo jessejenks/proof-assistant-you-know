@@ -1,5 +1,15 @@
 import * as ts from "typescript";
-import { Document, Justification, Assumption, Theorem, Step, Proof, AstKind, Expression } from "./parser/parser";
+import {
+    Document,
+    Justification,
+    Assumption,
+    Theorem,
+    Step,
+    Proof,
+    AstKind,
+    Expression,
+    Application,
+} from "./parser/parser";
 import { TypeRefTree, typeReference, func, parameter } from "./tsUtils";
 
 type Frame = Record<string, 0>;
@@ -45,14 +55,19 @@ const typeRefToName = (tree: TypeRefTree, id: number = 0): string => {
 };
 
 const handleJustification = (frames: Frame[], justification: Justification) =>
-    justification.expressions.reduce(
+    justification.kind === AstKind.Application
+        ? handleApplication(frames, justification)
+        : handleAssumption(frames, justification);
+
+const handleApplication = (frames: Frame[], application: Application) =>
+    application.arguments.reduce(
         (acc, curr) =>
             ts.factory.createCallExpression(acc, undefined, [
                 curr.kind === AstKind.Identifier
                     ? ts.factory.createCallExpression(escapeId(curr.name), undefined, undefined)
                     : ts.factory.createIdentifier(typeRefToName(handleExpression(frames, curr))),
             ]),
-        ts.factory.createCallExpression(escapeId(justification.rule), undefined, []),
+        ts.factory.createCallExpression(escapeId(application.rule), undefined, []),
     );
 
 const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expression => {
@@ -121,8 +136,8 @@ const handleProof = (frames: Frame[], proof: Proof): ts.ConciseBody => {
     });
     let retExp: ts.Expression;
     switch (proof.finalStep.kind) {
-        case AstKind.Justification: {
-            retExp = handleJustification(frames, proof.finalStep);
+        case AstKind.Application: {
+            retExp = handleApplication(frames, proof.finalStep);
             break;
         }
         case AstKind.Assumption: {

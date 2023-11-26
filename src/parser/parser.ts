@@ -4,9 +4,10 @@ Theorem       := "theorem" identifier? ":" Expression Proof
 Proof         := Statement* FinalStep
 Statement     := Assumption | Step
 FinalStep     := Statement | Justification
-Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
 Step          := "have" Expression Justification
-Justification := "by" identifier (identifier | Expression) ("," (identifier | Expression))*
+Justification := "by" Application | Assumption
+Application   := identifier (identifier | Expression) ("," (identifier | Expression))*
+Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
 Expression    := Implication
 Implication   := Disjunction ("=>" Disjunction)*
 Disjunction   := Conjunction ("|" Conjunction)*
@@ -25,7 +26,7 @@ export enum AstKind {
     Proof,
     Assumption,
     Step,
-    Justification,
+    Application,
     Identifier,
     Implication,
     Disjunction,
@@ -40,7 +41,7 @@ const KIND_TO_NAME: Record<AstKind, string> = {
     [AstKind.Proof]: "Proof",
     [AstKind.Assumption]: "Assumption",
     [AstKind.Step]: "Step",
-    [AstKind.Justification]: "Justification",
+    [AstKind.Application]: "Application",
     [AstKind.Identifier]: "Identifier",
     [AstKind.Implication]: "Implication",
     [AstKind.Disjunction]: "Disjunction",
@@ -73,21 +74,22 @@ export type Proof = {
 export type Statement = Assumption | Step;
 export type FinalStep = Statement | Justification;
 
-export type Assumption = {
-    kind: AstKind.Assumption;
-    assumptions: Expression[];
-    subproof: Proof;
-};
 export type Step = {
     kind: AstKind.Step;
     have: Expression;
     justification: Justification;
 };
 
-export type Justification = {
-    kind: AstKind.Justification;
+export type Justification = Application | Assumption;
+export type Application = {
+    kind: AstKind.Application;
     rule: string;
-    expressions: (Identifier | Expression)[];
+    arguments: (Identifier | Expression)[];
+};
+export type Assumption = {
+    kind: AstKind.Assumption;
+    assumptions: Expression[];
+    subproof: Proof;
 };
 
 export type Expression = TypeVar | Negation | Conjunction | Disjunction | Implication;
@@ -168,10 +170,6 @@ export class Parser {
         this.expect(TokenKind.Colon);
         const expression = this.parseExpression();
         const proof = this.parseProof();
-        // const justifications: Statement[] = [this.parseStatement()];
-        // while (!this.lexer.eof() && (this.nextIs(TokenKind.Identifier) || this.nextIs(TokenKind.AssumeKeyword))) {
-        //     justifications.push(this.parseStatement());
-        // }
         return { kind: AstKind.Theorem, name, expression, proof };
     }
 
@@ -229,14 +227,22 @@ export class Parser {
     }
 
     parseJustification(): Justification {
-        // Justification := "by" identifier (identifier | Expression) ("," (identifier | Expression))*
+        // Justification := "by" Application | Assumption
         this.expect(TokenKind.ByKeyword);
-        const { value: rule } = this.expect(TokenKind.Identifier);
-        const expressions: (Identifier | Expression)[] = [this.parseIdentifierOrExpression()];
-        while (this.chompIfNextIs(TokenKind.Comma)) {
-            expressions.push(this.parseIdentifierOrExpression());
+        if (this.nextIs(TokenKind.AssumeKeyword)) {
+            return this.parseAssumption();
         }
-        return { kind: AstKind.Justification, rule, expressions };
+        return this.parseApplication();
+    }
+
+    parseApplication(): Application {
+        // Application   := identifier (identifier | Expression) ("," (identifier | Expression))*
+        const { value: rule } = this.expect(TokenKind.Identifier);
+        const arguments_: (Identifier | Expression)[] = [this.parseIdentifierOrExpression()];
+        while (this.chompIfNextIs(TokenKind.Comma)) {
+            arguments_.push(this.parseIdentifierOrExpression());
+        }
+        return { kind: AstKind.Application, rule, arguments: arguments_ };
     }
 
     private parseIdentifierOrExpression(): Identifier | Expression {
