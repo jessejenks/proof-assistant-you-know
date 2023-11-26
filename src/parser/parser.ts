@@ -1,10 +1,10 @@
 /*
 Document      := Theorem+
-Theorem       := "theorem" identifier? ":" Expression Proof
+Theorem       := "theorem" (identifier ":")? Expression Proof
 Proof         := Statement* FinalStep
 Statement     := Assumption | Step
 FinalStep     := Statement | Justification
-Step          := "have" Expression Justification
+Step          := "have" (identifier ":")? Expression Justification
 Justification := "by" Application | Assumption
 Application   := identifier (identifier | Expression) ("," (identifier | Expression))*
 Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
@@ -76,7 +76,8 @@ export type FinalStep = Statement | Justification;
 
 export type Step = {
     kind: AstKind.Step;
-    have: Expression;
+    name: string | null;
+    expression: Expression;
     justification: Justification;
 };
 
@@ -160,14 +161,14 @@ export class Parser {
     }
 
     parseTheorem(): Theorem {
-        // Theorem       := "theorem" identifier? ":" Expression Proof
+        // Theorem       := "theorem" (identifier ":")? Expression Proof
         this.expect(TokenKind.TheoremKeyword);
         let name: string | null = null;
         if (this.nextIs(TokenKind.Identifier)) {
             let { value } = this.expect(TokenKind.Identifier);
+            this.expect(TokenKind.Colon);
             name = value;
         }
-        this.expect(TokenKind.Colon);
         const expression = this.parseExpression();
         const proof = this.parseProof();
         return { kind: AstKind.Theorem, name, expression, proof };
@@ -219,11 +220,17 @@ export class Parser {
     }
 
     parseStep(): Step {
-        // Step          := "have" Expression Justification
+        // Step          := "have" (identifier ":")? Expression Justification
         this.expect(TokenKind.HaveKeyword);
-        const have = this.parseExpression();
+        let name: string | null = null;
+        if (this.nextIs(TokenKind.Identifier)) {
+            const { value } = this.expect(TokenKind.Identifier);
+            this.expect(TokenKind.Colon);
+            name = value;
+        }
+        const expression = this.parseExpression();
         const justification = this.parseJustification();
-        return { kind: AstKind.Step, have, justification };
+        return { kind: AstKind.Step, name, expression, justification };
     }
 
     parseJustification(): Justification {

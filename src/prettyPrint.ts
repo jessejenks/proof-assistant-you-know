@@ -45,7 +45,10 @@ const handleApplication = (application: Application) =>
 const handleJustification = (justification: Justification) =>
     justification.kind === AstKind.Application ? handleApplication(justification) : handleAssumption(justification);
 
-const handleStep = (step: Step) => `have ${handleExpression(step.have)} by ${handleJustification(step.justification)}`;
+const handleStep = (step: Step) =>
+    `have ${step.name === null ? "" : step.name + " : "}${handleExpression(step.expression)} by ${handleJustification(
+        step.justification,
+    )}`;
 
 const handleStatement = (statement: Statement) => {
     switch (statement.kind) {
@@ -63,7 +66,7 @@ const handleProof = (proof: Proof) =>
     proof.statements.map(handleStatement).concat(handleFinalStep(proof.finalStep)).join("\n");
 
 const handleTheorem = (theorem: Theorem) =>
-    `theorem ${theorem.name === null ? "" : theorem.name + " "}: ${handleExpression(theorem.expression)}\n${handleProof(
+    `theorem ${theorem.name === null ? "" : theorem.name + " : "}${handleExpression(theorem.expression)}\n${handleProof(
         theorem.proof,
     )}`;
 

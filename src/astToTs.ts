@@ -11,6 +11,7 @@ import {
     Application,
 } from "./parser/parser";
 import { TypeRefTree, typeReference, func, parameter } from "./tsUtils";
+import { basicDecl } from "./primitives";
 
 type Frame = Record<string, 0>;
 
@@ -88,8 +89,8 @@ const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expressio
 
 const handleStep = (frames: Frame[], step: Step): [ts.VariableStatement, string] => {
     const call = handleJustification(frames, step.justification);
-    const tp = handleExpression(frames, step.have);
-    const name = typeRefToName(tp);
+    const tp = handleExpression(frames, step.expression);
+    const name = step.name === null ? typeRefToName(tp) : step.name;
     return [
         ts.factory.createVariableStatement(
             undefined,
@@ -113,13 +114,7 @@ const handleTheorem = (frames: Frame[], node: Theorem): ts.Statement => {
     if (node.name === null) {
         return ts.factory.createExpressionStatement(f);
     } else {
-        return ts.factory.createVariableStatement(
-            undefined,
-            ts.factory.createVariableDeclarationList(
-                [ts.factory.createVariableDeclaration(ts.factory.createIdentifier(node.name), undefined, undefined, f)],
-                ts.NodeFlags.Const,
-            ),
-        );
+        return basicDecl(node.name, f);
     }
 };
 
