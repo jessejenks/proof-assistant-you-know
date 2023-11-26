@@ -11,6 +11,7 @@ import {
     Justification,
     Identifier,
     Application,
+    NamedExpression,
 } from "./parser/parser";
 
 const handleExpression = (expression: Expression) => {
@@ -36,8 +37,11 @@ const handleExpression = (expression: Expression) => {
 const handleIdentifierOrExpression = (idOrExpr: Identifier | Expression) =>
     idOrExpr.kind === AstKind.Identifier ? idOrExpr.name : handleExpression(idOrExpr);
 
+const handleNamedExpression = ({ name, expression }: NamedExpression) =>
+    name === null ? handleExpression(expression) : `${name} : ${handleExpression(expression)}`;
+
 const handleAssumption = (assumption: Assumption) =>
-    `assume ${assumption.assumptions.map(handleExpression).join(", ")} {\n${handleProof(assumption.subproof)}\n}`;
+    `assume ${assumption.assumptions.map(handleNamedExpression).join(", ")} {\n${handleProof(assumption.subproof)}\n}`;
 
 const handleApplication = (application: Application) =>
     `${application.rule} ${application.arguments.map(handleIdentifierOrExpression).join(", ")}`;
@@ -46,9 +50,7 @@ const handleJustification = (justification: Justification) =>
     justification.kind === AstKind.Application ? handleApplication(justification) : handleAssumption(justification);
 
 const handleStep = (step: Step) =>
-    `have ${step.name === null ? "" : step.name + " : "}${handleExpression(step.expression)} by ${handleJustification(
-        step.justification,
-    )}`;
+    `have ${handleNamedExpression(step.expression)} by ${handleJustification(step.justification)}`;
 
 const handleStatement = (statement: Statement) => {
     switch (statement.kind) {
@@ -66,8 +68,6 @@ const handleProof = (proof: Proof) =>
     proof.statements.map(handleStatement).concat(handleFinalStep(proof.finalStep)).join("\n");
 
 const handleTheorem = (theorem: Theorem) =>
-    `theorem ${theorem.name === null ? "" : theorem.name + " : "}${handleExpression(theorem.expression)}\n${handleProof(
-        theorem.proof,
-    )}`;
+    `theorem ${handleNamedExpression(theorem.expression)}\n${handleProof(theorem.proof)}`;
 
 export const prettyPrint = (document: Document) => document.proofs.map(handleTheorem).join("\n\n") + "\n";

@@ -72,49 +72,52 @@ const handleApplication = (frames: Frame[], application: Application) =>
     );
 
 const handleAssumption = (frames: Frame[], assumption: Assumption): ts.Expression => {
-    const assumptions = assumption.assumptions.map((e) => {
+    const assumptions = assumption.assumptions.map(({ name, expression }) => {
         enterFrame(frames);
-        return handleExpression(frames, e);
+        const tr = handleExpression(frames, expression);
+        return [name === null ? typeRefToName(tr) : name, tr] as [string, TypeRefTree];
     });
     const body = handleProof(frames, assumption.subproof);
     const assumptionsCopy = [...assumptions];
-    const tp = assumptionsCopy.pop()!;
+    const [nm, tp] = assumptionsCopy.pop()!;
     let typeVars = exitFrame(frames);
-    const f = func([parameter(typeRefToName(tp), typeReference(tp))], typeVars, undefined, body);
-    return assumptionsCopy.reduceRight((ret, tp) => {
+    const f = func([parameter(nm, typeReference(tp))], typeVars, undefined, body);
+    return assumptionsCopy.reduceRight((ret, [nm, tp]) => {
         typeVars = exitFrame(frames);
-        return func([parameter(typeRefToName(tp), typeReference(tp))], typeVars, undefined, ret);
+        return func([parameter(nm, typeReference(tp))], typeVars, undefined, ret);
     }, f as ts.Expression);
 };
 
 const handleStep = (frames: Frame[], step: Step): [ts.VariableStatement, string] => {
     const call = handleJustification(frames, step.justification);
-    const tp = handleExpression(frames, step.expression);
-    const name = step.name === null ? typeRefToName(tp) : step.name;
+    const { name, expression } = step.expression;
+    const tp = handleExpression(frames, expression);
+    const stepName = name === null ? typeRefToName(tp) : name;
     return [
         ts.factory.createVariableStatement(
             undefined,
             ts.factory.createVariableDeclarationList(
-                [ts.factory.createVariableDeclaration(name, undefined, typeReference(tp), call)],
+                [ts.factory.createVariableDeclaration(stepName, undefined, typeReference(tp), call)],
                 // TODO: How to deal with repeats? Shouldn't happen but also shouldn't fail because of that either?
                 ts.NodeFlags.Const,
             ),
         ),
-        name,
+        stepName,
     ];
 };
 
 const handleTheorem = (frames: Frame[], node: Theorem): ts.Statement => {
     enterFrame(frames);
-    const expr = handleExpression(frames, node.expression);
+    const { name, expression } = node.expression;
+    const expr = handleExpression(frames, expression);
     const tp = typeReference(expr);
     const body = handleProof(frames, node.proof);
     const typeVars = exitFrame(frames);
     const f = func([], typeVars, tp, body);
-    if (node.name === null) {
+    if (name === null) {
         return ts.factory.createExpressionStatement(f);
     } else {
-        return basicDecl(node.name, f);
+        return basicDecl(name, f);
     }
 };
 

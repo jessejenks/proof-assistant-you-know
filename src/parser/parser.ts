@@ -1,19 +1,20 @@
 /*
-Document      := Theorem+
-Theorem       := "theorem" (identifier ":")? Expression Proof
-Proof         := Statement* FinalStep
-Statement     := Assumption | Step
-FinalStep     := Statement | Justification
-Step          := "have" (identifier ":")? Expression Justification
-Justification := "by" Application | Assumption
-Application   := identifier (identifier | Expression) ("," (identifier | Expression))*
-Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
-Expression    := Implication
-Implication   := Disjunction ("=>" Disjunction)*
-Disjunction   := Conjunction ("|" Conjunction)*
-Conjunction   := Negation ("&" Negation)*
-Negation      := "~" Negation | Atom
-Atom          := typeVar | "(" Expr ")"
+Document        := Theorem+
+Theorem         := "theorem" NamedExpression Proof
+Proof           := Statement* FinalStep
+Statement       := Assumption | Step
+FinalStep       := Statement | Justification
+Step            := "have" NamedExpression Justification
+Justification   := "by" Application | Assumption
+Application     := identifier (identifier | Expression) ("," (identifier | Expression))*
+Assumption      := "assume" NamedExpression ("," NamedExpression)* "{" Proof "}"
+NamedExpression := (identifier ":")? Expression
+Expression      := Implication
+Implication     := Disjunction ("=>" Disjunction)*
+Disjunction     := Conjunction ("|" Conjunction)*
+Conjunction     := Negation ("&" Negation)*
+Negation        := "~" Negation | Atom
+Atom            := typeVar | "(" Expr ")"
 */
 
 import { TokenKind, Token, Lexer, tokenKindToString, locationToString } from "./lexer";
@@ -60,8 +61,7 @@ export type Document = {
 };
 export type Theorem = {
     kind: AstKind.Theorem;
-    name: string | null;
-    expression: Expression;
+    expression: NamedExpression;
     proof: Proof;
 };
 
@@ -76,8 +76,7 @@ export type FinalStep = Statement | Justification;
 
 export type Step = {
     kind: AstKind.Step;
-    name: string | null;
-    expression: Expression;
+    expression: NamedExpression;
     justification: Justification;
 };
 
@@ -89,8 +88,13 @@ export type Application = {
 };
 export type Assumption = {
     kind: AstKind.Assumption;
-    assumptions: Expression[];
+    assumptions: NamedExpression[];
     subproof: Proof;
+};
+
+export type NamedExpression = {
+    name: string | null;
+    expression: Expression;
 };
 
 export type Expression = TypeVar | Negation | Conjunction | Disjunction | Implication;
@@ -163,15 +167,9 @@ export class Parser {
     parseTheorem(): Theorem {
         // Theorem       := "theorem" (identifier ":")? Expression Proof
         this.expect(TokenKind.TheoremKeyword);
-        let name: string | null = null;
-        if (this.nextIs(TokenKind.Identifier)) {
-            let { value } = this.expect(TokenKind.Identifier);
-            this.expect(TokenKind.Colon);
-            name = value;
-        }
-        const expression = this.parseExpression();
+        const expression = this.parseNamedExpression();
         const proof = this.parseProof();
-        return { kind: AstKind.Theorem, name, expression, proof };
+        return { kind: AstKind.Theorem, expression, proof };
     }
 
     parseProof(): Proof {
@@ -206,31 +204,12 @@ export class Parser {
         );
     }
 
-    parseAssumption(): Assumption {
-        // Assumption    := "assume" Expression ("," Expression)* "{" Proof "}"
-        this.expect(TokenKind.AssumeKeyword);
-        const assumptions: Expression[] = [this.parseExpression()];
-        while (this.chompIfNextIs(TokenKind.Comma)) {
-            assumptions.push(this.parseExpression());
-        }
-        this.expect(TokenKind.LBrace);
-        const subproof = this.parseProof();
-        this.expect(TokenKind.RBrace);
-        return { kind: AstKind.Assumption, assumptions, subproof };
-    }
-
     parseStep(): Step {
         // Step          := "have" (identifier ":")? Expression Justification
         this.expect(TokenKind.HaveKeyword);
-        let name: string | null = null;
-        if (this.nextIs(TokenKind.Identifier)) {
-            const { value } = this.expect(TokenKind.Identifier);
-            this.expect(TokenKind.Colon);
-            name = value;
-        }
-        const expression = this.parseExpression();
+        const expression = this.parseNamedExpression();
         const justification = this.parseJustification();
-        return { kind: AstKind.Step, name, expression, justification };
+        return { kind: AstKind.Step, expression, justification };
     }
 
     parseJustification(): Justification {
@@ -258,6 +237,29 @@ export class Parser {
             return { kind: AstKind.Identifier, name };
         }
         return this.parseExpression();
+    }
+
+    parseAssumption(): Assumption {
+        // Assumption    := "assume" (identifier ":")? Expression ("," (identifier ":")? Expression)* "{" Proof "}"
+        this.expect(TokenKind.AssumeKeyword);
+        const assumptions: NamedExpression[] = [this.parseNamedExpression()];
+        while (this.chompIfNextIs(TokenKind.Comma)) {
+            assumptions.push(this.parseNamedExpression());
+        }
+        this.expect(TokenKind.LBrace);
+        const subproof = this.parseProof();
+        this.expect(TokenKind.RBrace);
+        return { kind: AstKind.Assumption, assumptions, subproof };
+    }
+
+    parseNamedExpression(): NamedExpression {
+        let name: string | null = null;
+        if (this.nextIs(TokenKind.Identifier)) {
+            const { value } = this.expect(TokenKind.Identifier);
+            this.expect(TokenKind.Colon);
+            name = value;
+        }
+        return { name, expression: this.parseExpression() };
     }
 
     parseExpression(): Expression {
