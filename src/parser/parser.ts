@@ -17,9 +17,21 @@ Negation        := "~" Negation | Atom
 Atom            := typeVar | "(" Expr ")"
 */
 
-import { TokenKind, Token, Lexer, tokenKindToString, locationToString } from "./lexer";
+import { TokenKind, Token, Lexer, tokenKindToString, locationToString, Location } from "./lexer";
 
-class ParseError extends Error {}
+export class ParseError extends Error {
+    location: Location;
+    constructor(message: string, location: Location) {
+        super(message);
+        this.location = location;
+        // hack to get instanceof check to work
+        Object.setPrototypeOf(this, ParseError.prototype);
+    }
+
+    toString() {
+        return `${super.toString()} at ${locationToString(this.location)}`;
+    }
+}
 
 export enum AstKind {
     Document,
@@ -57,7 +69,7 @@ export const astKindToString = (astKind: AstKind | null | undefined): string =>
 export type Ast = Document | Theorem | Statement | Expression;
 export type Document = {
     kind: AstKind.Document;
-    proofs: Theorem[];
+    theorems: Theorem[];
 };
 export type Theorem = {
     kind: AstKind.Theorem;
@@ -149,19 +161,18 @@ export class Parser {
             return tok as Token & { kind: T };
         }
         throw new ParseError(
-            `Unexpected token. Expected ${tokenKindToString(tokenKind)} but got ${tokenKindToString(
-                tok?.kind,
-            )} at ${locationToString(tok?.location || this.lexer.location)}`,
+            `Unexpected token. Expected ${tokenKindToString(tokenKind)} but got ${tokenKindToString(tok?.kind)}`,
+            tok?.location || this.lexer.location,
         );
     }
 
     parse(): Document {
         // Document      := Theorem+
-        const proofs = [this.parseTheorem()];
+        const theorems = [this.parseTheorem()];
         while (!this.lexer.eof() && this.nextIs(TokenKind.TheoremKeyword)) {
-            proofs.push(this.parseTheorem());
+            theorems.push(this.parseTheorem());
         }
-        return { kind: AstKind.Document, proofs };
+        return { kind: AstKind.Document, theorems };
     }
 
     parseTheorem(): Theorem {
@@ -184,7 +195,7 @@ export class Parser {
         } else {
             const lastStatement = statements.pop();
             if (lastStatement === undefined)
-                throw new ParseError(`Empty Proof at ${locationToString(this.lexer.location)}`);
+                throw new ParseError(`Empty Proof, expected new statement or end of proof`, this.lexer.location);
             finalStep = lastStatement;
         }
         return { kind: AstKind.Proof, statements, finalStep };
@@ -198,9 +209,8 @@ export class Parser {
             return this.parseStep();
         }
         throw new ParseError(
-            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)} at ${locationToString(
-                this.lexer.location,
-            )}, expected "assume" or "have"`,
+            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)}, expected "assume" or "have"`,
+            this.lexer.location,
         );
     }
 
@@ -316,9 +326,8 @@ export class Parser {
             return { kind: AstKind.TypeVar, name: value };
         }
         throw new ParseError(
-            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)} at ${locationToString(
-                this.lexer.location,
-            )}`,
+            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)}`,
+            this.lexer.location,
         );
     }
 }

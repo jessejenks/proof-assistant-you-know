@@ -74,15 +74,25 @@ by modusTollens P => Q, ~Q
 }
 
 // modusTollens does not need to be a built-in rule of inference
-// but is included for clarity
+// but is included for convenience
 theorem (P => Q) => ~Q => ~P
 assume P => Q, ~Q, P {
 have Q by modusPonens P => Q, P
 by modusPonens ~Q, Q
 }
 
-// `~P` is just shorthand for `P => False`, so there are not special rules of inference
-// like not-introduction and elimination rules
+// Similarly, since `~P` is just shorthand for `P => False`, we don't need a built-in rule for not-elimination
+// but it is included for convenience
+
+theorem P => ~P => False
+assume P, ~P {
+by notElim P, ~P
+}
+
+theorem P => ~P => False
+assume P, ~P {
+by modusPonens ~P, P
+}
 
 // there is currently no special syntax for iff, like `<=>`
 

@@ -1,6 +1,7 @@
 import * as ts from "typescript";
 import { typeParameter, typeReference, parameter } from "./tsUtils";
 
+// True, False, and connctives
 export const createTrueType = () =>
     ts.factory.createTypeAliasDeclaration(
         undefined,
@@ -73,6 +74,7 @@ export const createImplDeclaration = () =>
         ts.factory.createFunctionTypeNode(undefined, [parameter("_", typeReference("A"))], typeReference("B")),
     );
 
+// Not<P> is an alias for Impl<P, False>
 export const createNotDeclaration = () =>
     ts.factory.createTypeAliasDeclaration(
         undefined,
@@ -81,6 +83,7 @@ export const createNotDeclaration = () =>
         typeReference(["Impl", ["A", "False"]]),
     );
 
+// helpers
 export const basicDecl = (name: string, value: ts.Expression): ts.VariableStatement =>
     ts.factory.createVariableStatement(
         undefined,
@@ -97,6 +100,25 @@ export const typedDecl = (name: string, type: ts.TypeNode, value: ts.Expression)
         ts.factory.createVariableDeclarationList(
             [ts.factory.createVariableDeclaration(name, undefined, type, value)],
             ts.NodeFlags.Const,
+        ),
+    );
+
+// Rules of inference
+
+export const createTrueIntro = () =>
+    typedDecl("trueIntro", typeReference("True"), ts.factory.createStringLiteral("true_"));
+
+// not sure how to categorize this in terms of introduction or elimination
+export const createFalseElim = () =>
+    basicDecl(
+        "falseElim",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A")],
+            [parameter("_", typeReference("False"))],
+            undefined,
+            undefined,
+            ts.factory.createAsExpression(ts.factory.createStringLiteral("never"), typeReference("A")),
         ),
     );
 
@@ -155,59 +177,6 @@ export const createAndElimRight = () =>
         ),
     );
 
-export const createModusPonens = () =>
-    basicDecl(
-        "modusPonens",
-        ts.factory.createArrowFunction(
-            undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
-            undefined,
-            undefined,
-            ts.factory.createArrowFunction(
-                undefined,
-                undefined,
-                [parameter("a", typeReference("A"))],
-                typeReference("B"),
-                undefined,
-                ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
-                    ts.factory.createIdentifier("a"),
-                ]),
-            ),
-        ),
-    );
-
-export const createModusTollens = () =>
-    basicDecl(
-        "modusTollens",
-        ts.factory.createArrowFunction(
-            undefined,
-            [typeParameter("A"), typeParameter("B")],
-            [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
-            undefined,
-            undefined,
-            ts.factory.createArrowFunction(
-                undefined,
-                undefined,
-                [parameter("notB", typeReference(["Not", ["B"]]))],
-                typeReference(["Not", ["A"]]),
-                undefined,
-                ts.factory.createArrowFunction(
-                    undefined,
-                    undefined,
-                    [parameter("a", typeReference("A"))],
-                    undefined,
-                    undefined,
-                    ts.factory.createCallExpression(ts.factory.createIdentifier("notB"), undefined, [
-                        ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
-                            ts.factory.createIdentifier("a"),
-                        ]),
-                    ]),
-                ),
-            ),
-        ),
-    );
-
 export const createOrIntroLeft = () =>
     basicDecl(
         "orIntroLeft",
@@ -256,8 +225,27 @@ export const createOrIntroRight = () =>
         ),
     );
 
-export const createTrueTheorem = () =>
-    typedDecl("true_", typeReference("True"), ts.factory.createStringLiteral("true_"));
+export const createImplElim = () =>
+    basicDecl(
+        "implElim",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A"), typeParameter("B")],
+            [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                undefined,
+                [parameter("a", typeReference("A"))],
+                typeReference("B"),
+                undefined,
+                ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
+                    ts.factory.createIdentifier("a"),
+                ]),
+            ),
+        ),
+    );
 
 export const createOrElim = () =>
     basicDecl(
@@ -305,22 +293,9 @@ export const createOrElim = () =>
         ),
     );
 
-export const createAbsurd = () =>
+export const createId = () =>
     basicDecl(
-        "absurd",
-        ts.factory.createArrowFunction(
-            undefined,
-            [typeParameter("A")],
-            [parameter("_", typeReference("False"))],
-            undefined,
-            undefined,
-            ts.factory.createAsExpression(ts.factory.createStringLiteral("never"), typeReference("A")),
-        ),
-    );
-
-export const createExact = () =>
-    basicDecl(
-        "exact",
+        "id",
         ts.factory.createArrowFunction(
             undefined,
             [typeParameter("A")],
@@ -328,5 +303,71 @@ export const createExact = () =>
             typeReference("A"),
             undefined,
             ts.factory.createIdentifier("a"),
+        ),
+    );
+
+// We can't call it "true" because that's a keyword in js. The typescript generator is aware of this and has special handling
+export const createTrueTrueIntroAlias = () => basicDecl("true_", ts.factory.createIdentifier("trueIntro"));
+export const createExFalsoFalseElimAlias = () => basicDecl("exFalso", ts.factory.createIdentifier("falseElim"));
+export const createAbsurdFalseElimAlias = () => basicDecl("absurd", ts.factory.createIdentifier("falseElim"));
+export const createModusPonensImplElimAlias = () => basicDecl("modusPonens", ts.factory.createIdentifier("implElim"));
+export const createExactIdAlias = () => basicDecl("exact", ts.factory.createIdentifier("id"));
+
+// modus tollens is actually provable from modus ponens and the definition of negation
+export const createModusTollens = () =>
+    basicDecl(
+        "modusTollens",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A"), typeParameter("B")],
+            [parameter("aToB", typeReference(["Impl", ["A", "B"]]))],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                undefined,
+                [parameter("notB", typeReference(["Not", ["B"]]))],
+                typeReference(["Not", ["A"]]),
+                undefined,
+                ts.factory.createArrowFunction(
+                    undefined,
+                    undefined,
+                    [parameter("a", typeReference("A"))],
+                    undefined,
+                    undefined,
+                    ts.factory.createCallExpression(ts.factory.createIdentifier("notB"), undefined, [
+                        ts.factory.createCallExpression(ts.factory.createIdentifier("aToB"), undefined, [
+                            ts.factory.createIdentifier("a"),
+                        ]),
+                    ]),
+                ),
+            ),
+        ),
+    );
+
+// not elimination is also provable from modus ponens and the definition of negation
+export const createNotElim = () =>
+    basicDecl(
+        "notElim",
+        ts.factory.createArrowFunction(
+            undefined,
+            [typeParameter("A")],
+            [parameter("a", typeReference("A"))],
+            undefined,
+            undefined,
+            ts.factory.createArrowFunction(
+                undefined,
+                undefined,
+                [parameter("notA", typeReference(["Not", ["A"]]))],
+                typeReference("False"),
+                undefined,
+                ts.factory.createCallExpression(
+                    ts.factory.createCallExpression(ts.factory.createIdentifier("implElim"), undefined, [
+                        ts.factory.createIdentifier("notA"),
+                    ]),
+                    undefined,
+                    [ts.factory.createIdentifier("a")],
+                ),
+            ),
         ),
     );

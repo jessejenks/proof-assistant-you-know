@@ -164,5 +164,5 @@ const handleExpression = (frames: Frame[], expr: Expression): TypeRefTree => {
 
 export const toStatements = (root: Document): ts.Statement[] => {
     const frames: Frame[] = [];
-    return root.proofs.map((p) => handleTheorem(frames, p));
+    return root.theorems.map((p) => handleTheorem(frames, p));
 };

@@ -72,4 +72,4 @@ const handleProof = (proof: Proof) =>
 const handleTheorem = (theorem: Theorem) =>
     `theorem ${handleNamedExpression(theorem.expression)}\n${handleProof(theorem.proof)}`;
 
-export const prettyPrint = (document: Document) => document.proofs.map(handleTheorem).join("\n\n") + "\n";
+export const prettyPrint = (document: Document) => document.theorems.map(handleTheorem).join("\n\n") + "\n";
