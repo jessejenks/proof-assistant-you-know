@@ -1,4 +1,5 @@
 export enum TokenKind {
+    EOF,
     Comment,
     LParen,
     RParen,
@@ -21,6 +22,7 @@ export enum TokenKind {
 }
 
 const KIND_TO_NAME: Record<TokenKind, string> = {
+    [TokenKind.EOF]: "EOF",
     [TokenKind.Comment]: "Comment",
     [TokenKind.LParen]: "(",
     [TokenKind.RParen]: ")",
@@ -51,6 +53,7 @@ export const locationToString = (loc: Location | undefined): string =>
     loc === undefined ? "[?, ?]" : `[${loc.line}, ${loc.column}]`;
 
 export type Token =
+    | { kind: TokenKind.EOF; location: Location }
     | { kind: TokenKind.Comment; location: Location }
     | { kind: TokenKind.LParen; location: Location }
     | { kind: TokenKind.RParen; location: Location }
@@ -77,22 +80,39 @@ const TYPEVAR = /[a-zA-Z]/;
 const IDENTIFIER_START = /[a-z]/;
 const IDENTIFIER = /[a-zA-Z0-9_]/;
 
-const KEYWORDS = {
-    assume: TokenKind.AssumeKeyword,
-    by: TokenKind.ByKeyword,
-    have: TokenKind.HaveKeyword,
-    theorem: TokenKind.TheoremKeyword,
-};
+const KEYWORDS = new Map<
+    string,
+    TokenKind.AssumeKeyword | TokenKind.ByKeyword | TokenKind.HaveKeyword | TokenKind.TheoremKeyword
+>([
+    ["assume", TokenKind.AssumeKeyword],
+    ["by", TokenKind.ByKeyword],
+    ["have", TokenKind.HaveKeyword],
+    ["theorem", TokenKind.TheoremKeyword],
+]);
+
+export class LexError extends Error {
+    location: Location;
+    constructor(message: string, location: Location) {
+        super(message);
+        this.location = location;
+        // hack to get instanceof check to work
+        Object.setPrototypeOf(this, LexError.prototype);
+    }
+
+    toString() {
+        return `${super.toString()} at ${locationToString(this.location)}`;
+    }
+}
 
 export class Lexer {
-    private input: string;
-    private index: number;
-    // both 1-indexed
-    location: Location;
-    private currentToken: Token | null;
+    private input!: string;
+    private index!: number;
+    location!: Location;
+    private currentIndex!: number;
+    private currentToken!: Token | null;
 
-    constructor(input?: string) {
-        this.setInput(input === undefined ? "" : input);
+    constructor(input: string = "") {
+        this.setInput(input);
     }
 
     setInput(input: string) {
@@ -100,23 +120,23 @@ export class Lexer {
         this.index = 0;
         this.location = { line: 1, column: 1 };
         this.currentToken = null;
+        this.currentIndex = 0;
+        // initialize currentToken
+        this.peek();
     }
 
-    next(): Token | null {
+    next(): Token {
         const tok = this.peek();
         this.currentToken = null;
+        this.currentIndex = this.index;
         return tok;
     }
 
-    peek(): Token | null {
+    peek(): Token {
         if (this.currentToken === null) {
             this.currentToken = this.getNextToken();
         }
         return this.currentToken;
-    }
-
-    private getNextToken(): Token | null {
-        return this.readSymbol();
     }
 
     private getLocation(increment: boolean = true): Location {
@@ -127,8 +147,8 @@ export class Lexer {
         return { ...this.location };
     }
 
-    private readSymbol(): Token | null {
-        while (!this.eof()) {
+    private getNextToken(): Token {
+        while (this.index < this.input.length) {
             switch (this.currentChar()) {
                 case ",":
                     return { kind: TokenKind.Comma, location: this.getLocation() };
@@ -162,11 +182,21 @@ export class Lexer {
                 case "/": {
                     if (this.nextChar() == "/") {
                         this.index += 2;
-                        while (!this.eof() && this.currentChar() != "\n") {
+                        while (!this.eof() && this.currentChar() != "\r" && this.currentChar() != "\n") {
                             this.location.column++;
                             this.index++;
                         }
                     }
+                    break;
+                }
+                // \r\n, \r, \n all treated as though \n
+                case "\r": {
+                    if (this.nextChar() === "\n") {
+                        this.index++;
+                    }
+                    this.location.column = 1;
+                    this.location.line++;
+                    this.index++;
                     break;
                 }
                 case "\n": {
@@ -181,33 +211,41 @@ export class Lexer {
                     this.location.column++;
                     break;
                 }
-                default: {
+                default:
                     return this.readWord();
                 }
             }
+        if (this.index >= this.input.length) {
+            // EOF is special. Don't have to consume token to update current index
+            this.currentIndex = this.index;
+            return { kind: TokenKind.EOF, location: this.getLocation(false) };
         }
-        return null;
+        this.croak("Unknown symbol");
     }
 
-    private readWord(): Token | null {
+    private readWord(): Token {
         const location = this.getLocation(false);
         const start = this.index;
         if (IDENTIFIER_START.test(this.currentChar())) {
+            this.location.column++;
             this.index++;
             while (!this.eof() && IDENTIFIER.test(this.currentChar())) {
+                this.location.column++;
                 this.index++;
             }
             if (this.index > start) {
                 const value = this.input.slice(start, this.index);
-                if (value in KEYWORDS) {
-                    return { kind: KEYWORDS[value], location };
+                if (KEYWORDS.has(value)) {
+                    return { kind: KEYWORDS.get(value)!, location };
                 } else {
                     return { kind: TokenKind.Identifier, value, location };
                 }
             }
         } else if (TYPEVAR_START.test(this.currentChar())) {
+            this.location.column++;
             this.index++;
             while (!this.eof() && TYPEVAR.test(this.currentChar())) {
+                this.location.column++;
                 this.index++;
             }
             if (this.index > start) {
@@ -215,7 +253,7 @@ export class Lexer {
                 return { kind: TokenKind.TypeVar, value, location };
             }
         }
-        return null;
+        this.croak("Unknown symbol");
     }
 
     private currentChar() {
@@ -226,7 +264,11 @@ export class Lexer {
         return this.input.charAt(this.index + 1);
     }
 
+    croak(msg: string): never {
+        throw new LexError(msg, this.getLocation(false));
+    }
+
     eof(): boolean {
-        return this.index >= this.input.length;
+        return this.currentIndex >= this.input.length;
     }
 }

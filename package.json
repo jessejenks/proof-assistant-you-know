@@ -1,6 +1,10 @@
 {
   "scripts": {
-    "compile": "tsc src/index.ts --outDir build --m commonjs"
+    "build": "tsc src/index.ts --outDir build --m commonjs",
+    "test:build": "tsc src/**/*.test.ts --outDir build_test --m commonjs",
+    "test:clean": "rm -rf build_test",
+    "test:run": "node --test build_test/**/*.test.js",
+    "test": "npm run test:build && npm run test:run && npm run test:clean"
   },
   "dependencies": {
     "typescript": "5.2.2"

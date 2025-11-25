@@ -139,7 +139,7 @@ by modusPonens ~P, P
 // similarly P | ~P is called the "law of excluded middle" and is also not provable.
 
 // example 19.7 from pg. 238 of open logic project's "what if" revision 8be15d6 (2021-07-11)
-theorem examples19_7 : ~~(P | ~P)
+theorem example19_7 : ~~(P | ~P)
 assume g : ~(P | ~P) {
 have h1 : P => P | ~P by assume P { by orIntroRight P }
 have h2 : ~P => P | ~P by assume ~P { by orIntroLeft ~P }

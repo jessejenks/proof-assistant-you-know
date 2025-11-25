@@ -1,45 +1,11 @@
 import * as ts from "typescript";
 import { Unit, Result } from "./utils";
 
-// export const fileToString = (sourceFile: ts.SourceFile): string =>
-//     ts
-//         .createPrinter({ newLine: ts.NewLineKind.LineFeed })
-//         .printNode(
-//             ts.EmitHint.Unspecified,
-//             sourceFile,
-//             ts.createSourceFile("output.ts", "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS),
-//         );
-
 export const statementsToFile = (statements: ts.Statement[]): ts.SourceFile =>
     ts.factory.createSourceFile(statements, ts.factory.createToken(ts.SyntaxKind.EndOfFileToken), ts.NodeFlags.None);
 
 export const fileToString = (sourceFile: ts.SourceFile): string =>
     ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(sourceFile);
-
-// export const diagnosticsToString = (diagnostics: readonly ts.Diagnostic[]) => ts.formatDiagnostics(diagnostics, {
-//     getCanonicalFileName: x => x,
-//     getCurrentDirectory: () => "",
-//     getNewLine: () => "\n",
-// });
-
-const getDiagnosticeLine = (
-    text: string,
-    sourceFile: ts.SourceFile,
-    lineStarts: readonly number[],
-    diagnostic: ts.Diagnostic,
-): string => {
-    if (diagnostic.start) {
-        const lineAndChar = sourceFile.getLineAndCharacterOfPosition(diagnostic.start);
-        const start = lineStarts[lineAndChar.line];
-        const stop = lineAndChar.line === lineStarts.length ? undefined : lineStarts[lineAndChar.line + 1] - 1;
-        const line = text.slice(start, stop);
-        console.log(line);
-        const underline = new Array(line.length).fill(" ");
-        underline[diagnostic.start - start] = "^";
-        return underline.join("");
-    }
-    return "";
-};
 
 export const diagnosticsToString = (diagnostics: readonly ts.Diagnostic[]): string =>
     ts.formatDiagnostics(diagnostics, {
@@ -47,20 +13,6 @@ export const diagnosticsToString = (diagnostics: readonly ts.Diagnostic[]): stri
         getCurrentDirectory: () => "",
         getNewLine: () => "\n",
     });
-
-// export const diagnosticsToString = (text: string, sourceFile: ts.SourceFile, diagnostics: readonly ts.Diagnostic[]): string => {
-//     const host: ts.FormatDiagnosticsHost = {
-//         getCanonicalFileName: x => x,
-//         getCurrentDirectory: () => "",
-//         getNewLine: () => "\n",
-//     }
-//     const lineStarts = sourceFile.getLineStarts();
-//     return diagnostics.map(diagnostic => (
-//         `${ts.formatDiagnostic(diagnostic, host)}\n${getDiagnosticeLine(text, sourceFile, lineStarts, diagnostic)}`
-//     )).join("\n")
-//     // ts.formatDiagnostics(diagnostics, host);
-//     // return "";
-// }
 
 const getCompilerOptions = (): ts.CompilerOptions => ({
     strict: true,

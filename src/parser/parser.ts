@@ -93,10 +93,11 @@ export type Step = {
 };
 
 export type Justification = Application | Assumption;
+export type Argument = Identifier | Expression;
 export type Application = {
     kind: AstKind.Application;
     rule: string;
-    arguments: (Identifier | Expression)[];
+    arguments: Argument[];
 };
 export type Assumption = {
     kind: AstKind.Assumption;
@@ -140,7 +141,7 @@ export class Parser {
     }
 
     private nextIs(tokenKind: TokenKind): boolean {
-        return this.lexer.peek()?.kind === tokenKind;
+        return this.lexer.peek().kind === tokenKind;
     }
 
     private chomp() {
@@ -162,7 +163,7 @@ export class Parser {
         }
         throw new ParseError(
             `Unexpected token. Expected ${tokenKindToString(tokenKind)} but got ${tokenKindToString(tok?.kind)}`,
-            tok?.location || this.lexer.location,
+            tok?.location ?? this.lexer.location,
         );
     }
 
@@ -208,9 +209,10 @@ export class Parser {
         } else if (this.nextIs(TokenKind.HaveKeyword)) {
             return this.parseStep();
         }
+        const tok = this.lexer.peek();
         throw new ParseError(
-            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)}, expected "assume" or "have"`,
-            this.lexer.location,
+            `Unexpected token type: ${tokenKindToString(tok?.kind)}, expected "assume" or "have"`,
+            tok?.location ?? this.lexer.location,
         );
     }
 
@@ -325,9 +327,10 @@ export class Parser {
             const { value } = this.expect(TokenKind.TypeVar);
             return { kind: AstKind.TypeVar, name: value };
         }
+        const tok = this.lexer.peek();
         throw new ParseError(
-            `Unexpected token type: ${tokenKindToString(this.lexer.peek()?.kind)}`,
-            this.lexer.location,
+            `Unexpected token type: ${tokenKindToString(tok?.kind)}`,
+            tok?.location ?? this.lexer.location,
         );
     }
 }

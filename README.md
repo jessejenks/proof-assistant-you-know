@@ -8,7 +8,7 @@ Compile the project
 
 ```sh
 npm i
-npm run compile
+npm run build
 ```
 
 This compiles to the `build` directory
@@ -16,7 +16,7 @@ This compiles to the `build` directory
 Now run the assistant against a file containing theorems to check.
 
 ```sh
-node build examples/basic.tsp
+node build check examples/basic.tsp
 ```
 
 ## The Underlying Logic

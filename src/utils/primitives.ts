@@ -1,6 +1,49 @@
 import * as ts from "typescript";
 import { typeParameter, typeReference, parameter } from "./tsUtils";
 
+const _primitiveNames = {
+    trueIntro: true,
+    falseElim: true,
+    andIntro: true,
+    andElimLeft: true,
+    andElimRight: true,
+    orIntroLeft: true,
+    orIntroRight: true,
+    implElim: true,
+    orElim: true,
+    id: true,
+    modusTollens: true,
+    notElim: true,
+} as const;
+
+export type PrimitiveName = keyof typeof _primitiveNames;
+
+export const primitiveNames = Object.keys(_primitiveNames) as PrimitiveName[];
+
+export function isPrimitive(name: string): name is PrimitiveName {
+    return name in _primitiveNames;
+}
+
+const _primitiveAliases = {
+    true_: "trueIntro",
+    exFalso: "falseElim",
+    absurd: "falseElim",
+    modusPonens: "implElim",
+    exact: "id",
+} as const;
+
+export type PrimitiveAlias = keyof typeof _primitiveAliases;
+
+export const primitiveAliases = Object.keys(_primitiveAliases) as PrimitiveAlias[];
+
+export function isPrimitiveAlias(name: string): name is PrimitiveAlias {
+    return name in _primitiveAliases;
+}
+
+export function getAliasedPrimitive(name: PrimitiveAlias): PrimitiveName {
+    return _primitiveAliases[name];
+}
+
 // True, False, and connctives
 export const createTrueType = () =>
     ts.factory.createTypeAliasDeclaration(
@@ -371,3 +414,24 @@ export const createNotElim = () =>
             ),
         ),
     );
+
+export const primitiveToConstructor: Record<PrimitiveName | PrimitiveAlias, () => ts.Statement> = {
+    trueIntro: createTrueIntro,
+    falseElim: createFalseElim,
+    andIntro: createAndIntro,
+    andElimLeft: createAndElimLeft,
+    andElimRight: createAndElimRight,
+    orIntroLeft: createOrIntroLeft,
+    orIntroRight: createOrIntroRight,
+    implElim: createImplElim,
+    orElim: createOrElim,
+    id: createId,
+    modusTollens: createModusTollens,
+    notElim: createNotElim,
+
+    true_: createTrueTrueIntroAlias,
+    exFalso: createExFalsoFalseElimAlias,
+    absurd: createAbsurdFalseElimAlias,
+    modusPonens: createModusPonensImplElimAlias,
+    exact: createExactIdAlias,
+};
