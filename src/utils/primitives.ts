@@ -14,6 +14,7 @@ const _primitiveNames = {
     id: true,
     modusTollens: true,
     notElim: true,
+    sorry: true,
 } as const;
 
 export type PrimitiveName = keyof typeof _primitiveNames;
@@ -415,6 +416,21 @@ export const createNotElim = () =>
         ),
     );
 
+export const createSorry = () =>
+    ts.factory.createVariableStatement(
+        [ts.factory.createToken(ts.SyntaxKind.DeclareKeyword)],
+        ts.factory.createVariableDeclarationList(
+            [
+                ts.factory.createVariableDeclaration(
+                    "sorry",
+                    undefined,
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                ),
+            ],
+            ts.NodeFlags.Const,
+        ),
+    );
+
 export const primitiveToConstructor: Record<PrimitiveName | PrimitiveAlias, () => ts.Statement> = {
     trueIntro: createTrueIntro,
     falseElim: createFalseElim,
@@ -428,6 +444,7 @@ export const primitiveToConstructor: Record<PrimitiveName | PrimitiveAlias, () =
     id: createId,
     modusTollens: createModusTollens,
     notElim: createNotElim,
+    sorry: createSorry,
 
     true_: createTrueTrueIntroAlias,
     exFalso: createExFalsoFalseElimAlias,

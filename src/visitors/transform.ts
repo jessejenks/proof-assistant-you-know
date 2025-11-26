@@ -25,6 +25,7 @@ import {
     isPrimitiveAlias,
     typedDecl,
 } from "../utils/primitives";
+import { Logger } from "../utils/utils";
 
 const JS_KEYWORDS = {
     true: 0,
@@ -196,6 +197,9 @@ export class Transformer extends Visitor<ReturnTypes> {
             // TODO more systematic way of handling transitive dependencies
             if (escapedName === "notElim") {
                 this.referencedPrimitives.add("implElim");
+            }
+            if (escapedName === "sorry") {
+                Logger.warn("proof uses 'sorry'!");
             }
         }
         if (isPrimitiveAlias(escapedName)) {
