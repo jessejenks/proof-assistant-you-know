@@ -13,6 +13,7 @@ import {
     primitiveNames,
     primitiveToConstructor,
     primitiveAliases,
+    createDoubleNegationElim,
 } from "./utils/primitives";
 import { LexError, Lexer, Location, Token, TokenKind, locationToString, tokenKindToString } from "./parser/lexer";
 import { PretterPrinter } from "./visitors/prettyPrint";
@@ -33,6 +34,7 @@ function help() {
     console.log("    run full typecheck");
     console.log("set environment variable");
     console.log("  LOGLEVEL={1,2,3,4} to set log level to ERROR, WARN, INFO, or DEBUG. Default is INFO");
+    console.log("  CLASSICAL=1 to include double negation elimination rule");
 }
 
 const errorLine = (source: string, location: Location) => {
@@ -171,6 +173,11 @@ function baseTransform(path: string) {
             fullStatements.push(primitiveToConstructor[primitiveAliases[i]]());
         }
     }
+
+    if (process.env["CLASSICAL"] === "1") {
+        fullStatements.push(createDoubleNegationElim());
+    }
+
     fullStatements.push(...statements);
 
     return fileToString(statementsToFile(fullStatements));

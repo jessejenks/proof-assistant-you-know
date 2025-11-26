@@ -23,8 +23,8 @@ node build check examples/basic.tsp
 
 This proof assistant only lets you write proofs for the intuitionistic propositional logic.
 
-Future work could be adding declarations or tags, to assume classical axioms. This would be similar to
-`open classical` in `lean`. See [lean docs](https://lean-lang.org/logic_and_proof/classical_reasoning.html).
+By setting the environment variable `CLASSICAL=1`, we can use the double negation elimination rule,
+though the generated program can no longer actually be run as a TypeScript file.
 
 ## Developing
 

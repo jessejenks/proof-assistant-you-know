@@ -122,8 +122,8 @@ export const createNotDeclaration = () =>
     ts.factory.createTypeAliasDeclaration(
         undefined,
         "Not",
-        [typeParameter("A")],
-        typeReference(["Impl", ["A", "False"]]),
+        [typeParameter("P")],
+        typeReference(["Impl", ["P", "False"]]),
     );
 
 // helpers
@@ -157,11 +157,11 @@ export const createFalseElim = () =>
         "falseElim",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A")],
+            [typeParameter("P")],
             [parameter("_", typeReference("False"))],
             undefined,
             undefined,
-            ts.factory.createAsExpression(ts.factory.createStringLiteral("never"), typeReference("A")),
+            ts.factory.createAsExpression(ts.factory.createStringLiteral("never"), typeReference("P")),
         ),
     );
 
@@ -394,22 +394,22 @@ export const createNotElim = () =>
         "notElim",
         ts.factory.createArrowFunction(
             undefined,
-            [typeParameter("A")],
-            [parameter("a", typeReference("A"))],
+            [typeParameter("P")],
+            [parameter("p", typeReference("P"))],
             undefined,
             undefined,
             ts.factory.createArrowFunction(
                 undefined,
                 undefined,
-                [parameter("notA", typeReference(["Not", ["A"]]))],
+                [parameter("notP", typeReference(["Not", ["P"]]))],
                 typeReference("False"),
                 undefined,
                 ts.factory.createCallExpression(
                     ts.factory.createCallExpression(ts.factory.createIdentifier("implElim"), undefined, [
-                        ts.factory.createIdentifier("notA"),
+                        ts.factory.createIdentifier("notP"),
                     ]),
                     undefined,
-                    [ts.factory.createIdentifier("a")],
+                    [ts.factory.createIdentifier("p")],
                 ),
             ),
         ),
@@ -435,3 +435,22 @@ export const primitiveToConstructor: Record<PrimitiveName | PrimitiveAlias, () =
     modusPonens: createModusPonensImplElimAlias,
     exact: createExactIdAlias,
 };
+
+export const createDoubleNegationElim = () =>
+    ts.factory.createVariableStatement(
+        [ts.factory.createToken(ts.SyntaxKind.DeclareKeyword)],
+        ts.factory.createVariableDeclarationList(
+            [
+                ts.factory.createVariableDeclaration(
+                    "doubleNegationElim",
+                    undefined,
+                    ts.factory.createFunctionTypeNode(
+                        [typeParameter("P")],
+                        [parameter("_", typeReference(["Not", [["Not", ["P"]]]]))],
+                        typeReference("P"),
+                    ),
+                ),
+            ],
+            ts.NodeFlags.Const,
+        ),
+    );
