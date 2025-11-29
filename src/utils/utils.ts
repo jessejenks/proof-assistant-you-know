@@ -73,3 +73,6 @@ export namespace Timer {
         Logger.debug(`${process.hrtime(start)[0]}s ${elapsed.toFixed(precision)}ms`); // print message + time
     };
 }
+
+export const inClassicalMode = process.env["CLASSICAL"] === "1";
+export const inSystemFMode = process.env["SYSTEM_F"] === "1";

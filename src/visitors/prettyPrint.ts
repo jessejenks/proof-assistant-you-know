@@ -12,6 +12,8 @@ import {
     Implication,
     Application,
     Justification,
+    Generalization,
+    Quantified,
 } from "../parser/parser";
 import { Formatter, Visitor } from "./visitor";
 
@@ -82,6 +84,14 @@ export class PretterPrinter extends Visitor {
         this.f.write("\n}");
     }
 
+    visitGeneralization(node: Generalization) {
+        this.f.write("forall ");
+        this.f.write(node.typeVars.join(", "));
+        this.f.write(" {\n");
+        this.visitProof(node.subproof);
+        this.f.write("\n}");
+    }
+
     visitStep(node: Step) {
         this.f.write("have ");
         if (node.expression.name) {
@@ -105,6 +115,15 @@ export class PretterPrinter extends Visitor {
 
     visitIdentifier(node: Identifier) {
         this.f.write(node.name);
+    }
+
+    visitQuantified(node: Quantified) {
+        this.f.write("(");
+        this.f.write("forall ");
+        this.f.write(node.typeVars.join(", "));
+        this.f.write(" . ");
+        this.visitExpression(node.body);
+        this.f.write(")");
     }
 
     visitImplication(node: Implication) {
@@ -133,11 +152,25 @@ export class PretterPrinter extends Visitor {
 
     visitNegation(node: Negation) {
         this.f.write("(~");
-        this.visitExpression(node.value);
+        this.visitExpression(node.body);
         this.f.write(")");
     }
 
     visitTypeVar(node: TypeVar) {
-        this.f.write(node.name);
+        if (node.args.length > 0) {
+            this.f.write(node.name);
+            this.f.write("[");
+        } else {
+            this.f.write(node.name);
+        }
+        for (let i = 0; i < node.args.length; i++) {
+            if (i > 0) {
+                this.f.write(", ");
+            }
+            this.f.write(node.args[i]);
+        }
+        if (node.args.length > 0) {
+            this.f.write("]");
+        }
     }
 }

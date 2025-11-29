@@ -1,6 +1,6 @@
-import * as fs from "fs";
+import * as fs from "node:fs";
 import * as ts from "typescript";
-import { Timer, Logger } from "./utils/utils";
+import { Timer, Logger, inClassicalMode, inSystemFMode } from "./utils/utils";
 import { statementsToFile, fileToString, compile, diagnosticsToString } from "./utils/compilationUtils";
 import { Parser, ParseError } from "./parser/parser";
 import {
@@ -14,11 +14,12 @@ import {
     primitiveToConstructor,
     primitiveAliases,
     createDoubleNegationElim,
+    createApplyDeclaration,
 } from "./utils/primitives";
 import { LexError, Lexer, Location, Token, TokenKind, locationToString, tokenKindToString } from "./parser/lexer";
 import { PretterPrinter } from "./visitors/prettyPrint";
 import { SExpVisitor } from "./visitors/sexp";
-import { Transformer } from "./visitors/transform";
+import { TransformError, Transformer } from "./visitors/transform";
 
 function help() {
     console.log("Usage");
@@ -35,6 +36,7 @@ function help() {
     console.log("set environment variable");
     console.log("  LOGLEVEL={1,2,3,4} to set log level to ERROR, WARN, INFO, or DEBUG. Default is INFO");
     console.log("  CLASSICAL=1 to include double negation elimination rule");
+    console.log("  SYSTEM_F=1 to allow quantification and higher order propositions");
 }
 
 const errorLine = (source: string, location: Location) => {
@@ -74,6 +76,7 @@ function lex(path: string) {
                 case TokenKind.ByKeyword:
                 case TokenKind.HaveKeyword:
                 case TokenKind.TheoremKeyword:
+                case TokenKind.ForallKeyword:
                     console.log(
                         locationToString(tok.location).padEnd(10),
                         TokenKind[tok.kind].padEnd(15),
@@ -152,7 +155,17 @@ function baseTransform(path: string) {
     const parsed = parseFile(path);
     const start = Timer.start("Begin transform");
     const transformer = new Transformer();
-    const statements = transformer.visitDocument(parsed);
+    let statements: ts.Statement[] = [];
+    try {
+        statements = transformer.visitDocument(parsed);
+    } catch (e) {
+        if (e instanceof TransformError) {
+            Logger.error(e.message);
+            process.exit(1);
+        } else {
+            throw e;
+        }
+    }
     Timer.elapsed(start);
 
     const fullStatements: ts.Statement[] = [
@@ -163,6 +176,11 @@ function baseTransform(path: string) {
         createImplDeclaration(),
         createNotDeclaration(),
     ];
+
+    if (inSystemFMode) {
+        fullStatements.push(createApplyDeclaration());
+    }
+
     for (let i = 0; i < primitiveNames.length; i++) {
         if (transformer.usedPrimitive(primitiveNames[i])) {
             fullStatements.push(primitiveToConstructor[primitiveNames[i]]());
@@ -174,7 +192,7 @@ function baseTransform(path: string) {
         }
     }
 
-    if (process.env["CLASSICAL"] === "1") {
+    if (inClassicalMode) {
         fullStatements.push(createDoubleNegationElim());
     }
 

@@ -13,9 +13,11 @@ import {
     Implication,
     Application,
     AstKind,
+    Quantified,
+    Generalization,
 } from "../parser/parser";
 import { Visitor } from "./visitor";
-import { TypeRefTree, typeReference, func, parameter } from "../utils/tsUtils";
+import { func, parameter, typeParameter } from "../utils/tsUtils";
 import {
     PrimitiveAlias,
     PrimitiveName,
@@ -25,7 +27,7 @@ import {
     isPrimitiveAlias,
     typedDecl,
 } from "../utils/primitives";
-import { Logger } from "../utils/utils";
+import { Logger, inSystemFMode } from "../utils/utils";
 
 const JS_KEYWORDS = {
     true: 0,
@@ -34,7 +36,13 @@ const JS_KEYWORDS = {
     undefined: 0,
 };
 
-const escapeId = (name: string) => ts.factory.createIdentifier(name in JS_KEYWORDS ? `${name}_` : name);
+export class TransformError extends Error {
+    constructor(message: string) {
+        super(message);
+        // hack to get instanceof check to work
+        Object.setPrototypeOf(this, TransformError.prototype);
+    }
+}
 
 type Frame = Record<string, 0>;
 
@@ -43,24 +51,30 @@ type ReturnTypes = {
     [AstKind.Theorem]: ts.Statement;
     [AstKind.Proof]: ts.ConciseBody;
     [AstKind.Assumption]: ts.Expression;
-    [AstKind.Step]: [ts.VariableStatement, string];
+    [AstKind.Generalization]: ts.Expression;
+    [AstKind.Step]: [string, ts.VariableStatement];
     [AstKind.Application]: ts.Expression;
     [AstKind.Identifier]: ts.Identifier;
-    [AstKind.Implication]: TypeRefTree;
-    [AstKind.Disjunction]: TypeRefTree;
-    [AstKind.Conjunction]: TypeRefTree;
-    [AstKind.Negation]: TypeRefTree;
-    [AstKind.TypeVar]: TypeRefTree;
+    [AstKind.Quantified]: [string, ts.TypeNode];
+    [AstKind.Implication]: [string, ts.TypeReferenceNode];
+    [AstKind.Disjunction]: [string, ts.TypeReferenceNode];
+    [AstKind.Conjunction]: [string, ts.TypeReferenceNode];
+    [AstKind.Negation]: [string, ts.TypeReferenceNode];
+    [AstKind.TypeVar]: [string, ts.TypeReferenceNode];
 };
 
 export class Transformer extends Visitor<ReturnTypes> {
     protected frames: Frame[];
     protected referencedPrimitives: Set<PrimitiveName | PrimitiveAlias>;
+    protected quantifierBindings: string[];
+    protected extraDecls: ts.Statement[][];
 
     constructor() {
         super();
         this.frames = [];
         this.referencedPrimitives = new Set();
+        this.quantifierBindings = [];
+        this.extraDecls = [];
     }
 
     protected enterFrame() {
@@ -94,14 +108,14 @@ export class Transformer extends Visitor<ReturnTypes> {
     visitDocument(node: Document) {
         this.frames = [];
         this.referencedPrimitives.clear();
-        return node.theorems.map((t) => this.visitTheorem(t));
+        this.quantifierBindings = [];
+        return node.theorems.flatMap((t) => this.visitTheorem(t));
     }
 
     visitTheorem(node: Theorem) {
         this.enterFrame();
         const { name, expression } = node.expression;
-        const expr = this.visitExpression(expression);
-        const tp = typeReference(expr);
+        const [_, tp] = this.visitExpression(expression);
         const body = this.visitProof(node.proof);
         const typeVars = this.exitFrame();
         const f = func([], typeVars, tp, body);
@@ -117,8 +131,10 @@ export class Transformer extends Visitor<ReturnTypes> {
             switch (s.kind) {
                 case AstKind.Assumption:
                     return ts.factory.createExpressionStatement(this.visitAssumption(s));
+                case AstKind.Generalization:
+                    return ts.factory.createExpressionStatement(this.visitGeneralization(s));
                 case AstKind.Step: {
-                    const [decl] = this.visitStep(s);
+                    const [, decl] = this.visitStep(s);
                     return decl;
                 }
             }
@@ -129,12 +145,16 @@ export class Transformer extends Visitor<ReturnTypes> {
                 retExp = this.visitApplication(node.finalStep);
                 break;
             }
+            case AstKind.Generalization: {
+                retExp = this.visitGeneralization(node.finalStep);
+                break;
+            }
             case AstKind.Assumption: {
                 retExp = this.visitAssumption(node.finalStep);
                 break;
             }
             case AstKind.Step: {
-                const [decl, name] = this.visitStep(node.finalStep);
+                const [name, decl] = this.visitStep(node.finalStep);
                 body.push(decl);
                 retExp = ts.factory.createIdentifier(name);
             }
@@ -147,42 +167,63 @@ export class Transformer extends Visitor<ReturnTypes> {
     visitAssumption(node: Assumption) {
         const assumptions = node.assumptions.map(({ name, expression }) => {
             this.enterFrame();
-            const tr = this.visitExpression(expression);
-            return [name === null ? this.typeRefToName(tr) : name, tr] as [string, TypeRefTree];
+            const [n, tr] = this.visitExpression(expression);
+            return [name === null ? n : name, tr] as [string, ts.TypeReferenceNode];
         });
         const body = this.visitProof(node.subproof);
         const assumptionsCopy = [...assumptions];
         const [nm, tp] = assumptionsCopy.pop()!;
         let typeVars = this.exitFrame();
-        const f = func([parameter(nm, typeReference(tp))], typeVars, undefined, body);
+        const f = func([parameter(nm, tp)], typeVars, undefined, body);
         return assumptionsCopy.reduceRight((ret, [nm, tp]) => {
             typeVars = this.exitFrame();
-            return func([parameter(nm, typeReference(tp))], typeVars, undefined, ret);
+            return func([parameter(nm, tp)], typeVars, undefined, ret);
         }, f as ts.Expression);
     }
 
-    visitStep(node: Step): [ts.VariableStatement, string] {
+    visitGeneralization(node: Generalization) {
+        this.quantifierBindings.push(...node.typeVars);
+        const body = this.visitProof(node.subproof);
+        for (let i = 0; i < node.typeVars.length; i++) {
+            this.quantifierBindings.pop();
+        }
+        return node.typeVars.reduceRight((ret, tp) => func([], [tp], undefined, ret), body as ts.Expression);
+    }
+
+    visitStep(node: Step): [string, ts.VariableStatement] {
         const call = this.visitJustification(node.justification);
         const { name, expression } = node.expression;
-        const tp = this.visitExpression(expression);
-        const stepName = name === null ? this.typeRefToName(tp) : name;
+        const [n, tp] = this.visitExpression(expression);
+        const stepName = name === null ? n : name;
         return [
             // TODO: How to deal with repeats? Shouldn't happen but also shouldn't fail because of that either?
-            typedDecl(stepName, typeReference(tp), call),
             stepName,
+            typedDecl(stepName, tp, call),
         ];
     }
 
     visitApplication(node: Application) {
-        return node.arguments.reduce(
-            (acc, curr) =>
-                ts.factory.createCallExpression(acc, undefined, [
-                    curr.kind === AstKind.Identifier
-                        ? this.visitIdentifier(curr)
-                        : ts.factory.createIdentifier(this.typeRefToName(this.visitExpression(curr))),
-                ]),
-            this.checkAndEscapeIdentifier(node.rule) as ts.Expression,
-        );
+        if (inSystemFMode && node.rule === "forallElim") {
+            if (node.arguments.length !== 2) {
+                throw new TransformError(
+                    `bad forallElim call: Incorrect number of arguments. Expects 2, got ${node.arguments.length}`,
+                );
+            }
+            const [arg1, arg2] = node.arguments;
+            if (arg1.kind === AstKind.Identifier || arg2.kind !== AstKind.Identifier) {
+                throw new TransformError(`bad forallElim call: Requires 1 Type Expression and 1 Identifier`);
+            }
+            const [, tp1] = this.visitExpression(arg1);
+            return ts.factory.createCallExpression(this.visitIdentifier(arg2), [tp1], []);
+        }
+
+        return node.arguments.reduce((acc, curr) => {
+            if (curr.kind === AstKind.Identifier) {
+                return ts.factory.createCallExpression(acc, undefined, [this.visitIdentifier(curr)]);
+            }
+            const [n, _] = this.visitExpression(curr);
+            return ts.factory.createCallExpression(acc, undefined, [ts.factory.createIdentifier(n)]);
+        }, this.checkAndEscapeIdentifier(node.rule) as ts.Expression);
     }
 
     visitIdentifier(node: Identifier) {
@@ -190,7 +231,7 @@ export class Transformer extends Visitor<ReturnTypes> {
     }
 
     protected checkAndEscapeIdentifier(name: string) {
-        const escaped = escapeId(name);
+        const escaped = this.escapeId(name);
         const escapedName = escaped.text;
         if (isPrimitive(escapedName)) {
             this.referencedPrimitives.add(escapedName);
@@ -209,38 +250,74 @@ export class Transformer extends Visitor<ReturnTypes> {
         return escaped;
     }
 
-    protected typeRefToName(tree: TypeRefTree): string {
-        if (typeof tree === "string") {
-            tree = tree.toLowerCase();
-            if (tree in JS_KEYWORDS) {
-                if (tree === "true") {
-                    this.referencedPrimitives.add("true_");
-                }
-                return `${tree}_`;
-            }
-            return `${tree}0`;
+    protected escapeId(name: string) {
+        if (name === "true") {
+            this.referencedPrimitives.add("true_");
         }
-        return `${tree[0].toLowerCase()}_${tree[1].map((t) => this.typeRefToName(t)).join("")}_`;
+        return ts.factory.createIdentifier(name in JS_KEYWORDS ? `${name}_` : name);
     }
 
-    visitImplication(node: Implication): TypeRefTree {
-        return ["Impl", [this.visitExpression(node.left), this.visitExpression(node.right)]];
+    visitQuantified(node: Quantified): [string, ts.TypeNode] {
+        // [[forall X . phi(X)]] = <X>() => [[phi(X)]]
+        this.quantifierBindings.push(...node.typeVars);
+        const [n, tp] = this.visitExpression(node.body);
+        const q = node.typeVars.reduceRight(
+            (ret, tv) => ts.factory.createFunctionTypeNode([typeParameter(tv)], [], ret),
+            tp,
+        );
+        // const t = ts.factory.createFunctionTypeNode(node.typeVars.map(typeParameter), [], tp);
+        for (let i = 0; i < node.typeVars.length; i++) {
+            this.quantifierBindings.pop();
+        }
+        return [`${n}_${node.typeVars.map((t) => t.toLowerCase()).join("_")}_`, q];
     }
 
-    visitDisjunction(node: Disjunction): TypeRefTree {
-        return ["Or", [this.visitExpression(node.left), this.visitExpression(node.right)]];
+    visitImplication(node: Implication): [string, ts.TypeReferenceNode] {
+        const [ln, ltp] = this.visitExpression(node.left);
+        const [rn, rtp] = this.visitExpression(node.right);
+        return [`impl_${ln}_${rn}_`, ts.factory.createTypeReferenceNode("Impl", [ltp, rtp])];
     }
 
-    visitConjunction(node: Conjunction): TypeRefTree {
-        return ["And", [this.visitExpression(node.left), this.visitExpression(node.right)]];
+    visitDisjunction(node: Disjunction): [string, ts.TypeReferenceNode] {
+        const [ln, ltp] = this.visitExpression(node.left);
+        const [rn, rtp] = this.visitExpression(node.right);
+        return [`or_${ln}_${rn}_`, ts.factory.createTypeReferenceNode("Or", [ltp, rtp])];
     }
 
-    visitNegation(node: Negation): TypeRefTree {
-        return ["Not", [this.visitExpression(node.value)]];
+    visitConjunction(node: Conjunction): [string, ts.TypeReferenceNode] {
+        const [ln, ltp] = this.visitExpression(node.left);
+        const [rn, rtp] = this.visitExpression(node.right);
+        return [`and_${ln}_${rn}_`, ts.factory.createTypeReferenceNode("And", [ltp, rtp])];
     }
 
-    visitTypeVar(node: TypeVar): TypeRefTree {
-        this.addFreeVariable(node.name);
-        return node.name;
+    visitNegation(node: Negation): [string, ts.TypeReferenceNode] {
+        const [n, tp] = this.visitExpression(node.body);
+        return [`not_${n}_`, ts.factory.createTypeReferenceNode("Not", [tp])];
+    }
+
+    visitTypeVar(node: TypeVar): [string, ts.TypeReferenceNode] {
+        if (node.args.length > 0) {
+            if (node.args.length > 1) {
+                Logger.warn(node.name, "Type variables with arity > 1 are not yet supported");
+            }
+            if (!this.quantifierBindings.includes(node.name)) {
+                this.addFreeVariable(node.name);
+            }
+            if (!this.quantifierBindings.includes(node.args[0])) {
+                this.addFreeVariable(node.args[0]);
+            }
+            return [
+                `apply_${node.name.toLowerCase()}_${node.args[0].toLowerCase()}_`,
+                node.args.reduce(
+                    (acc, curr) =>
+                        ts.factory.createTypeReferenceNode("Apply", [acc, ts.factory.createTypeReferenceNode(curr)]),
+                    ts.factory.createTypeReferenceNode(node.name),
+                ),
+            ];
+        }
+        if (!this.quantifierBindings.includes(node.name)) {
+            this.addFreeVariable(node.name);
+        }
+        return [`${node.name.toLowerCase()}_`, ts.factory.createTypeReferenceNode(node.name)];
     }
 }
