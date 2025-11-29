@@ -17,6 +17,8 @@ import {
     FinalStep,
     Justification,
     Argument,
+    Generalization,
+    Quantified,
 } from "../parser/parser";
 
 export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, void>> {
@@ -26,6 +28,7 @@ export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, v
     visitFinalStep(node: FinalStep): R[FinalStep["kind"]] {
         switch (node.kind) {
             case AstKind.Assumption:
+            case AstKind.Generalization:
             case AstKind.Step:
                 return this.visitStatement(node);
             case AstKind.Application:
@@ -36,6 +39,8 @@ export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, v
         switch (node.kind) {
             case AstKind.Assumption:
                 return this.visitAssumption(node);
+            case AstKind.Generalization:
+                return this.visitGeneralization(node);
             case AstKind.Step:
                 return this.visitStep(node);
         }
@@ -44,11 +49,14 @@ export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, v
         switch (node.kind) {
             case AstKind.Assumption:
                 return this.visitAssumption(node);
+            case AstKind.Generalization:
+                return this.visitGeneralization(node);
             case AstKind.Application:
                 return this.visitApplication(node);
         }
     }
     abstract visitAssumption(node: Assumption): R[AstKind.Assumption];
+    abstract visitGeneralization(node: Generalization): R[AstKind.Generalization];
     abstract visitStep(node: Step): R[AstKind.Step];
     abstract visitApplication(node: Application): R[AstKind.Application];
     visitArgument(node: Argument): R[Argument["kind"]] {
@@ -62,6 +70,8 @@ export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, v
     abstract visitIdentifier(node: Identifier): R[AstKind.Identifier];
     visitExpression(node: Expression): R[Expression["kind"]] {
         switch (node.kind) {
+            case AstKind.Quantified:
+                return this.visitQuantified(node);
             case AstKind.Implication:
                 return this.visitImplication(node);
             case AstKind.Disjunction:
@@ -74,6 +84,7 @@ export abstract class Visitor<R extends Record<AstKind, any> = Record<AstKind, v
                 return this.visitTypeVar(node);
         }
     }
+    abstract visitQuantified(node: Quantified): R[AstKind.Quantified];
     abstract visitImplication(node: Implication): R[AstKind.Implication];
     abstract visitDisjunction(node: Disjunction): R[AstKind.Disjunction];
     abstract visitConjunction(node: Conjunction): R[AstKind.Conjunction];

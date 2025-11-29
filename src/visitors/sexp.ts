@@ -11,6 +11,8 @@ import {
     Disjunction,
     Implication,
     Application,
+    Generalization,
+    Quantified,
 } from "../parser/parser";
 import { Visitor, Formatter } from "./visitor";
 
@@ -98,6 +100,13 @@ export class SExpVisitor extends Visitor {
         this.exit();
     }
 
+    visitGeneralization(node: Generalization) {
+        this.enter("Generalization", ...node.typeVars);
+        this.indent();
+        this.visitProof(node.subproof);
+        this.exit();
+    }
+
     visitStep(node: Step) {
         if (node.expression.name) {
             this.enter("Step", node.expression.name);
@@ -122,6 +131,13 @@ export class SExpVisitor extends Visitor {
 
     visitIdentifier(node: Identifier) {
         this.leaf("Identifier", node.name);
+    }
+
+    visitQuantified(node: Quantified) {
+        this.enter("Quantified", ...node.typeVars);
+        this.indent();
+        this.visitExpression(node.body);
+        this.exit();
     }
 
     visitImplication(node: Implication) {
@@ -154,11 +170,11 @@ export class SExpVisitor extends Visitor {
     visitNegation(node: Negation) {
         this.enter("Negation");
         this.indent();
-        this.visitExpression(node.value);
+        this.visitExpression(node.body);
         this.exit();
     }
 
     visitTypeVar(node: TypeVar) {
-        this.leaf("Proposition", node.name);
+        this.leaf("Proposition", node.name, ...node.args);
     }
 }

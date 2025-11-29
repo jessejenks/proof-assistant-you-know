@@ -1,3 +1,5 @@
+import { inSystemFMode } from "../utils/utils";
+
 export enum TokenKind {
     EOF,
     Comment,
@@ -10,6 +12,7 @@ export enum TokenKind {
     Implies,
     Colon,
     Comma,
+    Dot,
     And,
     Or,
     Not,
@@ -19,6 +22,7 @@ export enum TokenKind {
     ByKeyword,
     HaveKeyword,
     TheoremKeyword,
+    ForallKeyword,
 }
 
 const KIND_TO_NAME: Record<TokenKind, string> = {
@@ -33,6 +37,7 @@ const KIND_TO_NAME: Record<TokenKind, string> = {
     [TokenKind.Implies]: "=>",
     [TokenKind.Colon]: ":",
     [TokenKind.Comma]: ",",
+    [TokenKind.Dot]: ".",
     [TokenKind.And]: "&",
     [TokenKind.Or]: "|",
     [TokenKind.Not]: "~",
@@ -42,6 +47,7 @@ const KIND_TO_NAME: Record<TokenKind, string> = {
     [TokenKind.ByKeyword]: "by",
     [TokenKind.HaveKeyword]: "have",
     [TokenKind.TheoremKeyword]: "theorem",
+    [TokenKind.ForallKeyword]: "forall",
 };
 
 export const tokenKindToString = (tokenKind: TokenKind | null | undefined): string =>
@@ -64,6 +70,7 @@ export type Token =
     | { kind: TokenKind.Implies; location: Location }
     | { kind: TokenKind.Colon; location: Location }
     | { kind: TokenKind.Comma; location: Location }
+    | { kind: TokenKind.Dot; location: Location }
     | { kind: TokenKind.And; location: Location }
     | { kind: TokenKind.Or; location: Location }
     | { kind: TokenKind.Not; location: Location }
@@ -72,7 +79,8 @@ export type Token =
     | { kind: TokenKind.AssumeKeyword; location: Location }
     | { kind: TokenKind.ByKeyword; location: Location }
     | { kind: TokenKind.HaveKeyword; location: Location }
-    | { kind: TokenKind.TheoremKeyword; location: Location };
+    | { kind: TokenKind.TheoremKeyword; location: Location }
+    | { kind: TokenKind.ForallKeyword; location: Location };
 
 const TYPEVAR_START = /[A-Z]/;
 const TYPEVAR = /[a-zA-Z]/;
@@ -82,13 +90,21 @@ const IDENTIFIER = /[a-zA-Z0-9_]/;
 
 const KEYWORDS = new Map<
     string,
-    TokenKind.AssumeKeyword | TokenKind.ByKeyword | TokenKind.HaveKeyword | TokenKind.TheoremKeyword
+    | TokenKind.AssumeKeyword
+    | TokenKind.ByKeyword
+    | TokenKind.HaveKeyword
+    | TokenKind.TheoremKeyword
+    | TokenKind.ForallKeyword
 >([
     ["assume", TokenKind.AssumeKeyword],
     ["by", TokenKind.ByKeyword],
     ["have", TokenKind.HaveKeyword],
     ["theorem", TokenKind.TheoremKeyword],
 ]);
+
+if (inSystemFMode) {
+    KEYWORDS.set("forall", TokenKind.ForallKeyword);
+}
 
 export class LexError extends Error {
     location: Location;
@@ -154,6 +170,11 @@ export class Lexer {
                     return { kind: TokenKind.Comma, location: this.getLocation() };
                 case ":":
                     return { kind: TokenKind.Colon, location: this.getLocation() };
+                case ".":
+                    if (inSystemFMode) {
+                        return { kind: TokenKind.Dot, location: this.getLocation() };
+                    }
+                    this.croak("Unknown symbol '.'");
                 case "(":
                     return { kind: TokenKind.LParen, location: this.getLocation() };
                 case ")":
@@ -213,8 +234,8 @@ export class Lexer {
                 }
                 default:
                     return this.readWord();
-                }
             }
+        }
         if (this.index >= this.input.length) {
             // EOF is special. Don't have to consume token to update current index
             this.currentIndex = this.index;

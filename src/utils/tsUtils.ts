@@ -9,7 +9,7 @@ export const typeReference = (tree: TypeRefTree): ts.TypeReferenceNode =>
         ? ts.factory.createTypeReferenceNode(tree)
         : ts.factory.createTypeReferenceNode(tree[0], tree[1].map(typeReference));
 
-export const parameter = (name: string, type: ts.TypeReferenceNode) =>
+export const parameter = (name: string, type: ts.TypeNode) =>
     ts.factory.createParameterDeclaration(
         undefined,
         undefined,

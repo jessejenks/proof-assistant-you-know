@@ -127,6 +127,19 @@ export const createNotDeclaration = () =>
         typeReference(["Impl", ["P", "False"]]),
     );
 
+// System F only
+export const createApplyDeclaration = () =>
+    ts.factory.createTypeAliasDeclaration(
+        undefined,
+        "Apply",
+        [typeParameter("P"), typeParameter("A")],
+        ts.factory.createTupleTypeNode([
+            ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("apply")),
+            typeReference("P"),
+            typeReference("A"),
+        ]),
+    );
+
 // helpers
 export const basicDecl = (name: string, value: ts.Expression): ts.VariableStatement =>
     ts.factory.createVariableStatement(
